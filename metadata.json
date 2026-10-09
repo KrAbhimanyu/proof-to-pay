@@ -1,0 +1,6 @@
+{
+  "name": "Proof-to-Pay",
+  "description": "Your skills. Your proof. Your first pay. The emerging talent work-experience and paid project platform connecting students and creators in India with verified businesses.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,247 @@
+package in.prooftopay.app.data.model
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+enum class UserRole {
+    @SerialName("STUDENT") STUDENT,
+    @SerialName("BUSINESS") BUSINESS,
+    @SerialName("ADMIN") ADMIN
+}
+
+@Serializable
+enum class VerificationStatus {
+    @SerialName("UNVERIFIED") UNVERIFIED,
+    @SerialName("PENDING") PENDING,
+    @SerialName("VERIFIED") VERIFIED,
+    @SerialName("REJECTED") REJECTED
+}
+
+@Serializable
+enum class ProjectStatus {
+    @SerialName("DRAFT") DRAFT,
+    @SerialName("PENDING_REVIEW") PENDING_REVIEW,
+    @SerialName("APPROVED") APPROVED,
+    @SerialName("IN_PROGRESS") IN_PROGRESS,
+    @SerialName("SUBMITTED") SUBMITTED,
+    @SerialName("REVISION_REQUESTED") REVISION_REQUESTED,
+    @SerialName("COMPLETED") COMPLETED,
+    @SerialName("DISPUTED") DISPUTED,
+    @SerialName("CANCELLED") CANCELLED
+}
+
+@Serializable
+enum class ApplicationStatus {
+    @SerialName("PENDING") PENDING,
+    @SerialName("SHORTLISTED") SHORTLISTED,
+    @SerialName("OFFER_EXTENDED") OFFER_EXTENDED,
+    @SerialName("ACCEPTED") ACCEPTED,
+    @SerialName("REJECTED") REJECTED,
+    @SerialName("WITHDRAWN") WITHDRAWN
+}
+
+@Serializable
+enum class PaymentStatus {
+    @SerialName("NOT_INITIATED") NOT_INITIATED,
+    @SerialName("PENDING") PENDING,
+    @SerialName("PAID") PAID,
+    @SerialName("FAILED") FAILED,
+    @SerialName("REFUNDED") REFUNDED
+}
+
+@Serializable
+data class UserProfile(
+    val id: String,
+    val email: String,
+    val name: String,
+    val role: UserRole,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    val city: String? = null,
+    val state: String? = null,
+    @SerialName("is_suspended") val isSuspended: Boolean = false,
+    @SerialName("suspension_reason") val suspensionReason: String? = null,
+    @SerialName("created_at") val createdAt: String? = null
+)
+
+@Serializable
+data class PortfolioSample(
+    val title: String,
+    val url: String
+)
+
+@Serializable
+data class DeliverableItem(
+    val id: String,
+    val title: String,
+    val description: String,
+    val format: String
+)
+
+@Serializable
+data class Project(
+    val id: String,
+    @SerialName("business_id") val businessId: String,
+    @SerialName("business_name") val businessName: String,
+    @SerialName("business_city") val businessCity: String,
+    @SerialName("business_verified") val businessVerified: Boolean = false,
+    val title: String,
+    val summary: String,
+    val description: String,
+    val category: String,
+    @SerialName("required_skills") val requiredSkills: List<String> = emptyList(),
+    @SerialName("budget_inr") val budgetInr: Double,
+    @SerialName("deadline_days") val deadlineDays: Int,
+    @SerialName("expected_delivery_date") val expectedDeliveryDate: String,
+    @SerialName("permitted_revisions") val permittedRevisions: Int = 2,
+    @SerialName("payment_terms") val paymentTerms: String,
+    val status: ProjectStatus = ProjectStatus.DRAFT,
+    @SerialName("cover_image") val coverImage: String? = null,
+    @SerialName("moderation_notes") val moderationNotes: String? = null,
+    @SerialName("selected_student_id") val selectedStudentId: String? = null,
+    @SerialName("selected_student_name") val selectedStudentName: String? = null,
+    @SerialName("active_offer_id") val activeOfferId: String? = null,
+    @SerialName("created_at") val createdAt: String? = null
+)
+
+@Serializable
+data class Application(
+    val id: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("project_title") val projectTitle: String,
+    @SerialName("student_id") val studentId: String,
+    @SerialName("student_name") val studentName: String,
+    @SerialName("pitch_message") val pitchMessage: String,
+    @SerialName("portfolio_samples") val portfolioSamples: List<PortfolioSample> = emptyList(),
+    @SerialName("proposed_delivery_days") val proposedDeliveryDays: Int = 7,
+    val status: ApplicationStatus = ApplicationStatus.PENDING,
+    @SerialName("created_at") val createdAt: String? = null
+)
+
+@Serializable
+data class ProjectOffer(
+    val id: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("project_title") val projectTitle: String,
+    @SerialName("business_id") val businessId: String,
+    @SerialName("business_name") val businessName: String,
+    @SerialName("student_id") val studentId: String,
+    @SerialName("student_name") val studentName: String,
+    @SerialName("agreed_budget_inr") val agreedBudgetInr: Double,
+    @SerialName("agreed_deadline") val agreedDeadline: String,
+    @SerialName("agreed_revisions") val agreedRevisions: Int = 2,
+    @SerialName("scope_summary") val scopeSummary: String,
+    val status: String = "PENDING",
+    @SerialName("created_at") val createdAt: String? = null
+)
+
+@Serializable
+data class Submission(
+    val id: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("student_id") val studentId: String,
+    val version: Int = 1,
+    val notes: String,
+    @SerialName("live_link") val liveLink: String? = null,
+    val status: String = "PENDING_REVIEW",
+    @SerialName("revision_feedback") val revisionFeedback: String? = null,
+    @SerialName("submitted_at") val submittedAt: String? = null
+)
+
+@Serializable
+data class PaymentRecord(
+    val id: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("project_title") val projectTitle: String,
+    @SerialName("business_id") val businessId: String,
+    @SerialName("student_id") val studentId: String,
+    @SerialName("amount_inr") val amountInr: Double,
+    val status: PaymentStatus = PaymentStatus.NOT_INITIATED,
+    @SerialName("payment_method") val paymentMethod: String = "UPI",
+    @SerialName("transaction_reference_utr") val transactionReferenceUtr: String? = null,
+    val notes: String? = null,
+    @SerialName("recorded_at") val recordedAt: String? = null
+)
+
+@Serializable
+data class VerifiedReview(
+    val id: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("project_title") val projectTitle: String,
+    @SerialName("reviewer_name") val reviewerName: String,
+    val rating: Int,
+    val comment: String,
+    @SerialName("verified_deliverable_summary") val verifiedDeliverableSummary: String,
+    @SerialName("created_at") val createdAt: String? = null
+)
+
+@Serializable
+data class InAppNotification(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    val title: String,
+    val body: String,
+    val type: String,
+    @SerialName("project_id") val projectId: String? = null,
+    @SerialName("is_read") val isRead: Boolean = false,
+    @SerialName("created_at") val createdAt: String? = null
+)
+
+@Serializable
+data class StudentProfile(
+    @SerialName("user_id") val userId: String,
+    val headline: String,
+    val bio: String,
+    val age: Int,
+    val college: String,
+    val degree: String,
+    @SerialName("graduation_year") val graduationYear: Int = 2026,
+    val skills: List<String> = emptyList(),
+    @SerialName("experience_level") val experienceLevel: String = "INTERMEDIATE",
+    @SerialName("portfolio_links") val portfolioLinks: List<PortfolioSample> = emptyList(),
+    @SerialName("upi_id") val upiId: String? = null,
+    @SerialName("total_earned_inr") val totalEarnedInr: Double = 0.0,
+    @SerialName("completed_projects_count") val completedProjectsCount: Int = 0,
+    @SerialName("average_rating") val averageRating: Double = 5.0,
+    @SerialName("verified_portfolio_slug") val verifiedPortfolioSlug: String? = null
+)
+
+@Serializable
+data class BusinessProfile(
+    @SerialName("user_id") val userId: String,
+    @SerialName("company_name") val companyName: String,
+    val tagline: String? = null,
+    val website: String? = null,
+    val industry: String,
+    val city: String,
+    @SerialName("verification_status") val verificationStatus: VerificationStatus = VerificationStatus.UNVERIFIED,
+    @SerialName("verification_legal_entity") val verificationLegalEntity: String? = null,
+    @SerialName("verification_doc_type") val verificationDocType: String? = null,
+    @SerialName("verification_doc_number") val verificationDocNumber: String? = null,
+    @SerialName("total_spent_inr") val totalSpentInr: Double = 0.0,
+    @SerialName("projects_posted_count") val projectsPostedCount: Int = 0
+)
+
+@Serializable
+data class DisputeRecord(
+    val id: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("project_title") val projectTitle: String,
+    @SerialName("raised_by_id") val raisedById: String,
+    @SerialName("raised_by_name") val raisedByName: String,
+    val reason: String,
+    val status: String = "OPEN",
+    val resolution: String? = null,
+    @SerialName("created_at") val createdAt: String? = null
+)
+
+@Serializable
+data class AuditLog(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("user_email") val userEmail: String,
+    val action: String,
+    val details: String,
+    val timestamp: String
+)
+
