@@ -9,7 +9,11 @@ import {
   PaymentRecord,
   VerifiedReview,
   DisputeRecord,
-  AuditLog
+  AuditLog,
+  PlatformCommissionRecord,
+  PlatformMonetizationConfig,
+  ProofPassportItem,
+  ScopeChangeRequest
 } from '../types';
 
 export const INITIAL_USERS: User[] = [
@@ -85,6 +89,7 @@ export const INITIAL_STUDENT_PROFILES: Record<string, StudentProfile> = {
     completedProjectsCount: 3,
     averageRating: 5.0,
     verifiedPortfolioSlug: 'aarav-sharma',
+    pinnedBadgeIds: ['early-adopter', 'top-rated', 'project-completed'],
   },
   'student-2': {
     userId: 'student-2',
@@ -105,6 +110,7 @@ export const INITIAL_STUDENT_PROFILES: Record<string, StudentProfile> = {
     completedProjectsCount: 4,
     averageRating: 4.9,
     verifiedPortfolioSlug: 'ananya-iyer',
+    pinnedBadgeIds: ['early-adopter', 'top-rated', 'project-completed', 'direct-payout'],
   }
 };
 
@@ -346,8 +352,192 @@ export const INITIAL_OFFERS: ProjectOffer[] = [
     agreedRevisions: 3,
     scopeSummary: 'Creation of vector logo assets, 4 pouch packaging dielines, and 12-page style guide as specified in listing. Binding fixed fee of ₹25,000 INR with 3 structured review rounds.',
     status: 'ACCEPTED',
+    commissionRatePercent: 5,
+    platformFeeINR: 1250,
+    creatorReceivesINR: 25000,
+    feePayer: 'BUSINESS',
+    commissionTermsSnapshot: 'Agreed: ₹25,000 INR. Platform fee: ₹1,250 INR (5%) payable separately by Kavita Botanicals to Proof-to-Pay upon completion. Creator Ananya Iyer receives 100% (₹25,000 INR) directly with ₹0 deductions.',
+    cancellationTerms: 'Mutual agreement allows pro-rata release for completed dielines. Unilateral cancellation without breach requires full agreed compensation for accepted milestones.',
+    deliverablesSnapshot: [
+      { id: 'del-p1', title: 'Vector Brand Identity Suite', description: 'Primary logo, alternate marks, typography scale, CMYK/Pantone color swatch book', format: 'AI / SVG / PDF' },
+      { id: 'del-p2', title: 'Print-Ready Pouch Dielines (4 SKUs)', description: 'Print-ready packaging templates formatted with bleed, crop marks, and barcode zones', format: 'Adobe Illustrator Vector' },
+      { id: 'del-p3', title: 'Brand Guidelines Style Sheet (12 Pages)', description: 'Minimum clear-space, improper usage, packaging layout hierarchy, and typography rules', format: 'Interactive PDF' }
+    ],
+    scopeLocked: true,
+    lockedAt: '2026-09-24T08:30:00.000Z',
+    explicitAcceptedAt: '2026-09-24T08:30:00.000Z',
+    explicitAcceptedByStudent: true,
+    acceptedChecklist: {
+      deliverablesAgreed: true,
+      deadlineAgreed: true,
+      revisionsAgreed: true,
+      cancellationAgreed: true,
+      feeTermsAgreed: true,
+    },
     createdAt: '2026-09-23T11:00:00.000Z',
     respondedAt: '2026-09-24T08:30:00.000Z',
+  },
+  {
+    id: 'offer-proj-3',
+    projectId: 'proj-3',
+    projectTitle: 'Next.js + Tailwind Marketing Landing Page & Component Library',
+    businessId: 'business-1',
+    businessName: 'HyperFlow Labs',
+    studentId: 'student-1',
+    studentName: 'Aarav Sharma',
+    agreedBudgetINR: 15000,
+    agreedDeadline: '2026-09-18',
+    agreedRevisions: 2,
+    scopeSummary: 'Delivery of production Next.js App Router codebase, interactive currency pricing calculator widget, and live Vercel deployment with >= 90 Lighthouse score.',
+    status: 'ACCEPTED',
+    commissionRatePercent: 5,
+    platformFeeINR: 750,
+    creatorReceivesINR: 15000,
+    feePayer: 'BUSINESS',
+    commissionTermsSnapshot: 'Agreed: ₹15,000 INR. Platform fee: ₹750 INR (5%) payable separately by HyperFlow Labs to Proof-to-Pay upon completion. Creator Aarav Sharma receives full ₹15,000 INR with ₹0 deductions.',
+    cancellationTerms: 'Standard Beta Terms: 100% payout upon passing automated GitHub PR checks and Lighthouse benchmarks. Zero deduction for platform fee.',
+    deliverablesSnapshot: [
+      { id: 'del-c1', title: 'Complete Next.js Codebase', description: 'Clean git repository with modular components', format: 'GitHub Pull Request' },
+      { id: 'del-c2', title: 'Pricing & Currency Calculator Widget', description: 'Interactive toggle between Monthly/Annual and INR/USD conversion', format: 'TypeScript Component' },
+      { id: 'del-c3', title: 'Vercel Preview Deployment', description: 'Live preview link passing all ESLint and build checks', format: 'Vercel Live URL' }
+    ],
+    scopeLocked: true,
+    lockedAt: '2026-09-02T10:00:00.000Z',
+    explicitAcceptedAt: '2026-09-02T10:00:00.000Z',
+    explicitAcceptedByStudent: true,
+    acceptedChecklist: {
+      deliverablesAgreed: true,
+      deadlineAgreed: true,
+      revisionsAgreed: true,
+      cancellationAgreed: true,
+      feeTermsAgreed: true,
+    },
+    createdAt: '2026-09-01T15:00:00.000Z',
+    respondedAt: '2026-09-02T10:00:00.000Z',
+  }
+];
+
+export const INITIAL_PROOF_PASSPORT_ITEMS: ProofPassportItem[] = [
+  {
+    id: 'passport-item-1',
+    studentId: 'student-1',
+    projectId: 'proj-3',
+    projectTitle: 'Next.js + Tailwind Marketing Landing Page & Component Library',
+    category: 'Web & Mobile Development',
+    completedAt: '2026-09-16T18:00:00.000Z',
+    completionSource: 'BUSINESS_APPROVAL',
+    businessName: 'HyperFlow Labs',
+    businessCity: 'Bengaluru',
+    sanitizedSummary: 'Engineered modular Next.js App Router marketing interface with dynamic pricing calculator and verified 98 Lighthouse performance score.',
+    rating: 5,
+    reviewSnippet: 'Aarav is an extraordinary emerging engineer... clean TypeScript types and delivered two days before the deadline.',
+    isPublic: true,
+    displayOrder: 1,
+    badgeTitle: 'Verified Work Delivery',
+    createdAt: '2026-09-16T18:00:00.000Z',
+  },
+  {
+    id: 'passport-item-2',
+    studentId: 'student-1',
+    projectId: 'proj-old-demo',
+    projectTitle: 'E-Commerce Icon Pack Vector Design Suite',
+    category: 'Design & Creative',
+    completedAt: '2026-08-10T14:00:00.000Z',
+    completionSource: 'DISPUTE_RESOLUTION',
+    businessName: 'Acme Ventures',
+    businessCity: 'Bengaluru',
+    sanitizedSummary: 'Vector icon system consisting of 40 scalable SVG icons verified compliant with original agreed scope specifications.',
+    rating: 5,
+    reviewSnippet: 'Deliverables verified 100% compliant with agreed project specifications through authorized platform dispute investigation.',
+    isPublic: true,
+    displayOrder: 2,
+    badgeTitle: 'Dispute Confirmed Outcome',
+    createdAt: '2026-08-10T14:00:00.000Z',
+  }
+];
+
+export const INITIAL_SCOPE_CHANGE_REQUESTS: ScopeChangeRequest[] = [
+  {
+    id: 'scr-demo-1',
+    projectId: 'proj-2',
+    offerId: 'offer-proj-2',
+    requestedByUserId: 'business-2',
+    requestedByName: 'Kavita Botanicals',
+    requestedByRole: 'BUSINESS',
+    reason: 'We want to expand the pouch range from 4 to 6 herbal flavors (adding Chamomile Calm and Tulsi Ginger).',
+    proposedBudgetINR: 32000,
+    proposedDeadline: '2026-11-05',
+    proposedRevisions: 3,
+    proposedDeliverables: [
+      { id: 'del-p1', title: 'Vector Brand Identity Suite', description: 'Primary logo, alternate marks, typography scale, CMYK/Pantone color swatch book', format: 'AI / SVG / PDF' },
+      { id: 'del-p2', title: 'Print-Ready Pouch Dielines (6 SKUs Expanded)', description: 'Print-ready packaging templates for 6 complete pouch blends with FSSAI typography compliance', format: 'Adobe Illustrator Vector' },
+      { id: 'del-p3', title: 'Brand Guidelines Style Sheet (12 Pages)', description: 'Minimum clear-space, packaging layout hierarchy, and typography rules', format: 'Interactive PDF' }
+    ],
+    proposedScopeSummary: 'Addition of 2 SKUs (Chamomile Calm & Tulsi Ginger) to packaging suite with budget increase of ₹7,000 INR (total ₹32,000 INR) and 8-day deadline extension.',
+    previousTermsSnapshot: {
+      budgetINR: 25000,
+      deadline: '2026-10-28',
+      revisions: 3,
+      scopeSummary: 'Creation of vector logo assets, 4 pouch packaging dielines, and 12-page style guide as specified in listing.',
+      deliverables: [
+        { id: 'del-p1', title: 'Vector Brand Identity Suite', description: 'Primary logo, alternate marks, typography scale, CMYK/Pantone color swatch book', format: 'AI / SVG / PDF' },
+        { id: 'del-p2', title: 'Print-Ready Pouch Dielines (4 SKUs)', description: 'Print-ready packaging templates formatted with bleed, crop marks, and barcode zones', format: 'Adobe Illustrator Vector' },
+        { id: 'del-p3', title: 'Brand Guidelines Style Sheet (12 Pages)', description: 'Minimum clear-space, improper usage, packaging layout hierarchy, and typography rules', format: 'Interactive PDF' }
+      ]
+    },
+    status: 'PENDING',
+    createdAt: '2026-09-28T14:00:00.000Z',
+  }
+];
+
+export const INITIAL_MONETIZATION_CONFIG: PlatformMonetizationConfig = {
+  defaultCommissionRatePercent: 5,
+  minProjectBudgetINR: 500,
+  paymentWindowDays: 5,
+  updatedAt: '2026-09-01T00:00:00.000Z',
+  updatedByUserId: 'admin-1',
+};
+
+export const INITIAL_PLATFORM_COMMISSIONS: PlatformCommissionRecord[] = [
+  {
+    id: 'comm-proj-3',
+    projectId: 'proj-3',
+    projectTitle: 'Next.js + Tailwind Marketing Landing Page & Component Library',
+    businessId: 'business-1',
+    businessName: 'HyperFlow Labs',
+    studentId: 'student-1',
+    studentName: 'Aarav Sharma',
+    projectBudgetINR: 15000,
+    commissionRatePercent: 5,
+    platformFeeINR: 750,
+    status: 'VERIFIED_COLLECTED',
+    dueDate: '2026-09-21',
+    paymentMethod: 'UPI',
+    reportedUTR: 'COMM-UPI-HDFC-8829104',
+    reportedAt: '2026-09-17T12:00:00.000Z',
+    reportedNotes: 'Transferred 5% platform fee for Project 3 via HDFC UPI',
+    verifiedByUserId: 'admin-1',
+    verifiedByName: 'Proof-to-Pay Admin Team',
+    verifiedAt: '2026-09-17T14:30:00.000Z',
+    evidenceReviewedNotes: 'Verified ₹750 INR credit match in platform current account statement via HDFC NetBanking against UTR COMM-UPI-HDFC-8829104.',
+    createdAt: '2026-09-16T18:30:00.000Z',
+    updatedAt: '2026-09-17T14:30:00.000Z',
+  },
+  {
+    id: 'comm-proj-2',
+    projectId: 'proj-2',
+    projectTitle: 'Artisanal Herbal Tea Brand Identity & Packaging Suite',
+    businessId: 'business-2',
+    businessName: 'Kavita Botanicals',
+    studentId: 'student-2',
+    studentName: 'Ananya Iyer',
+    projectBudgetINR: 25000,
+    commissionRatePercent: 5,
+    platformFeeINR: 1250,
+    status: 'NOT_DUE',
+    dueDate: '2026-11-02',
+    createdAt: '2026-09-24T08:30:00.000Z',
+    updatedAt: '2026-09-24T08:30:00.000Z',
   }
 ];
 

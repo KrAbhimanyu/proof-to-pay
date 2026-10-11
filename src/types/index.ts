@@ -61,6 +61,40 @@ export interface StudentProfile {
   completedProjectsCount: number;
   averageRating: number;
   verifiedPortfolioSlug: string;
+  pinnedBadgeIds?: string[];
+}
+
+export type BadgeTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
+export type BadgeCategory = 'MILESTONE' | 'REPUTATION' | 'DELIVERY' | 'COMMUNITY';
+
+export interface MilestoneBadge {
+  id: string;
+  name: string;
+  tagline: string;
+  description: string;
+  category: BadgeCategory;
+  tier: BadgeTier;
+  iconName: string;
+  unlocked: boolean;
+  unlockedAt?: string;
+  progress: number; // 0 to 100
+  currentValue: number;
+  targetValue: number;
+  unit: string;
+  requirement: string;
+  rewardPoints: number;
+  isFeatured?: boolean;
+}
+
+export interface CreatorLevelProgress {
+  currentLevel: number;
+  levelTitle: string;
+  totalXP: number;
+  currentLevelXP: number;
+  nextLevelXP: number;
+  progressPercent: number;
+  unlockedBadgesCount: number;
+  totalBadgesCount: number;
 }
 
 export interface BusinessProfile {
@@ -135,6 +169,21 @@ export interface Application {
   reviewedAt?: string;
 }
 
+export type ProjectPaymentStatus =
+  | 'NOT_REPORTED'
+  | 'REPORTED_BY_BUSINESS'
+  | 'RECEIPT_CONFIRMED_BY_CREATOR'
+  | 'DISPUTED';
+
+export type PlatformFeeStatus =
+  | 'NOT_DUE'
+  | 'DUE'
+  | 'REPORTED_PAID'
+  | 'VERIFIED_COLLECTED'
+  | 'OVERDUE'
+  | 'WAIVED'
+  | 'REFUNDED_OR_ADJUSTED';
+
 export interface ProjectOffer {
   id: string;
   projectId: string;
@@ -150,6 +199,160 @@ export interface ProjectOffer {
   status: 'PENDING' | 'ACCEPTED' | 'DECLINED';
   createdAt: string;
   respondedAt?: string;
+  // Phase 1 Beta Monetization Snapshot
+  commissionRatePercent: number; // e.g. 5%
+  platformFeeINR: number;        // e.g. agreedBudgetINR * 0.05
+  creatorReceivesINR: number;    // Exactly agreedBudgetINR (never reduced)
+  feePayer: 'BUSINESS';          // Business pays separately
+  commissionTermsSnapshot?: string;
+  // Phase 1 Scope Lock additions
+  cancellationTerms?: string;
+  deliverablesSnapshot?: DeliverableItem[];
+  scopeLocked?: boolean;
+  lockedAt?: string;
+  explicitAcceptedAt?: string;
+  explicitAcceptedByStudent?: boolean;
+  acceptedChecklist?: {
+    deliverablesAgreed: boolean;
+    deadlineAgreed: boolean;
+    revisionsAgreed: boolean;
+    cancellationAgreed: boolean;
+    feeTermsAgreed: boolean;
+  };
+}
+
+// Proof Passport: Verified projects completion credentials
+export interface ProofPassportItem {
+  id: string;
+  studentId: string;
+  projectId: string;
+  projectTitle: string;
+  category: string;
+  completedAt: string;
+  completionSource: 'BUSINESS_APPROVAL' | 'DISPUTE_RESOLUTION';
+  businessName: string;
+  businessCity?: string;
+  sanitizedSummary: string; // Sanitized public deliverables summary (no confidential files/assets)
+  rating?: number; // 1 to 5
+  reviewSnippet?: string;
+  isPublic: boolean; // Creator controls whether this appears on public passport
+  displayOrder: number;
+  badgeTitle?: string;
+  createdAt: string;
+}
+
+// Scope Lock Change Request
+export type ScopeChangeStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
+
+export interface ScopeChangeRequest {
+  id: string;
+  projectId: string;
+  offerId: string;
+  requestedByUserId: string;
+  requestedByName: string;
+  requestedByRole: 'STUDENT' | 'BUSINESS';
+  reason: string;
+  proposedBudgetINR: number;
+  proposedDeadline: string;
+  proposedRevisions: number;
+  proposedDeliverables: DeliverableItem[];
+  proposedScopeSummary: string;
+  previousTermsSnapshot: {
+    budgetINR: number;
+    deadline: string;
+    revisions: number;
+    scopeSummary: string;
+    deliverables: DeliverableItem[];
+  };
+  status: ScopeChangeStatus;
+  rejectionReason?: string;
+  createdAt: string;
+  respondedAt?: string;
+  respondedByUserId?: string;
+}
+
+// Work Trail: Chronological timeline event
+export type WorkTrailEventType =
+  | 'PROJECT_CREATED'
+  | 'APPLICATION_SUBMITTED'
+  | 'OFFER_EXTENDED'
+  | 'SCOPE_LOCKED_ACCEPTED'
+  | 'SCOPE_CHANGE_REQUESTED'
+  | 'SCOPE_CHANGE_ACCEPTED'
+  | 'SCOPE_CHANGE_REJECTED'
+  | 'DELIVERABLE_SUBMITTED'
+  | 'REVISION_REQUESTED'
+  | 'DELIVERABLES_APPROVED'
+  | 'PROJECT_PAYMENT_REPORTED'
+  | 'PROJECT_PAYMENT_CONFIRMED'
+  | 'PROJECT_PAYMENT_DISPUTED'
+  | 'PLATFORM_FEE_DUE'
+  | 'PLATFORM_FEE_REPORTED'
+  | 'PLATFORM_FEE_VERIFIED'
+  | 'DISPUTE_RAISED'
+  | 'DISPUTE_RESOLVED';
+
+export interface WorkTrailEvent {
+  id: string;
+  projectId: string;
+  eventType: WorkTrailEventType;
+  title: string;
+  description: string;
+  timestamp: string;
+  actorName: string;
+  actorRole: UserRole | 'SYSTEM';
+  metadata?: Record<string, any>;
+  isVerified: boolean;
+  verificationNote?: string;
+}
+
+export interface PlatformCommissionRecord {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+  businessId: string;
+  businessName: string;
+  studentId: string;
+  studentName: string;
+  projectBudgetINR: number;
+  commissionRatePercent: number;
+  platformFeeINR: number;
+  status: PlatformFeeStatus;
+  dueDate: string;
+  paymentMethod?: 'UPI' | 'NEFT_IMPS' | 'BANK_TRANSFER';
+  reportedUTR?: string;
+  reportedAt?: string;
+  reportedNotes?: string;
+  verifiedByUserId?: string;
+  verifiedByName?: string;
+  verifiedAt?: string;
+  evidenceReviewedNotes?: string;
+  waiverReason?: string;
+  waivedByUserId?: string;
+  waivedAt?: string;
+  adjustmentAmountINR?: number;
+  adjustmentReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlatformMonetizationConfig {
+  defaultCommissionRatePercent: number; // default 5
+  minProjectBudgetINR: number;          // 500
+  paymentWindowDays: number;            // 5 days after completion
+  updatedAt: string;
+  updatedByUserId?: string;
+}
+
+export interface MonetizationMetrics {
+  completedProjectsCount: number;
+  totalAgreedProjectValueINR: number;
+  commissionDueINR: number;
+  commissionReportedPaidINR: number;
+  commissionVerifiedCollectedINR: number;
+  overdueFeesINR: number;
+  waivedFeesINR: number;
+  feeCollectionRatePercent: number;
 }
 
 export interface SubmissionFile {
@@ -180,12 +383,15 @@ export interface PaymentRecord {
   businessId: string;
   studentId: string;
   amountINR: number;
-  status: PaymentStatus;
+  status: PaymentStatus | ProjectPaymentStatus;
   paymentMethod: 'UPI' | 'NEFT_IMPS' | 'BANK_TRANSFER';
   transactionReferenceUTR?: string;
   paymentProofUrl?: string;
   recordedByUserId: string;
   recordedAt?: string;
+  confirmedAt?: string;
+  confirmedByUserId?: string;
+  disputeReason?: string;
   notes?: string;
 }
 

@@ -61,6 +61,15 @@ export const Navbar: React.FC<Props> = ({
             Verified Portfolios
           </button>
           <button
+            onClick={() => onNavigate('pilot_checklist')}
+            className={`transition hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+              activeView === 'pilot_checklist' ? 'text-emerald-600 dark:text-emerald-400 font-semibold underline underline-offset-8 decoration-2' : ''
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Pilot Checklist</span>
+          </button>
+          <button
             onClick={() => onNavigate('about')}
             className={`transition hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0 ${
               activeView === 'about' ? 'text-indigo-600 dark:text-indigo-400 font-semibold underline underline-offset-8 decoration-2' : ''

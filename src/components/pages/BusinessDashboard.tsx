@@ -1,7 +1,18 @@
 import React, { useState } from 'react';
-import { User, BusinessProfile, ProjectListing, Application, ProjectOffer, ProjectSubmission, PaymentRecord, VerifiedReview } from '../../types';
+import {
+  User,
+  BusinessProfile,
+  ProjectListing,
+  Application,
+  ProjectOffer,
+  ProjectSubmission,
+  PaymentRecord,
+  VerifiedReview,
+  PlatformCommissionRecord
+} from '../../types';
 import { marketplaceStore } from '../../lib/storage';
 import { BusinessVerificationSchema, ProjectListingSchema, ProjectOfferSchema, RevisionRequestSchema, RecordPaymentSchema, ReviewSubmissionSchema } from '../../lib/schemas';
+import { Badges } from '../common/Badges';
 import confetti from 'canvas-confetti';
 import {
   Building2,
@@ -19,7 +30,11 @@ import {
   Star,
   ExternalLink,
   Users,
-  Briefcase
+  Briefcase,
+  Coins,
+  Receipt,
+  Info,
+  Sparkles
 } from 'lucide-react';
 
 interface Props {
@@ -51,6 +66,15 @@ export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate }) 
     return !!proj;
   });
   const payments = marketplaceStore.getPayments().filter((p) => p.businessId === currentUser.id);
+  const commissions = marketplaceStore.getPlatformCommissions().filter((c) => c.businessId === currentUser.id);
+  const monetizationConfig = marketplaceStore.getMonetizationConfig();
+
+  // --- Commission Fee Payment State ---
+  const [reportingCommissionModal, setReportingCommissionModal] = useState<PlatformCommissionRecord | null>(null);
+  const [commissionPaymentUTR, setCommissionPaymentUTR] = useState('');
+  const [commissionPaymentMethod, setCommissionPaymentMethod] = useState<'UPI' | 'NEFT_IMPS' | 'BANK_TRANSFER'>('UPI');
+  const [commissionPaymentNotes, setCommissionPaymentNotes] = useState('');
+  const [paymentSubTab, setPaymentSubTab] = useState<'creator_payouts' | 'platform_fees'>('creator_payouts');
 
   // --- Create Project Form State ---
   const [newTitle, setNewTitle] = useState('');
@@ -273,6 +297,34 @@ export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate }) 
       setPaymentUTR('');
       setPaymentNotes('');
       alert('Payment record successfully logged in audit trail!');
+      setActiveTab('payments');
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  // Handle Report Platform Commission Payment
+  const handleReportCommissionPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportingCommissionModal) return;
+
+    if (!commissionPaymentUTR || commissionPaymentUTR.trim().length < 4) {
+      alert('Please enter a valid bank transfer reference or UPI UTR number.');
+      return;
+    }
+
+    try {
+      marketplaceStore.reportPlatformCommissionPayment(
+        currentUser,
+        reportingCommissionModal.id,
+        commissionPaymentUTR,
+        commissionPaymentMethod,
+        commissionPaymentNotes
+      );
+      setReportingCommissionModal(null);
+      setCommissionPaymentUTR('');
+      setCommissionPaymentNotes('');
+      alert('Platform commission payment reported! An administrator will audit the transaction evidence.');
       setActiveTab('payments');
     } catch (err: any) {
       alert(err.message);
@@ -687,8 +739,34 @@ export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate }) 
                         {app.studentName[0]}
                       </div>
                       <div>
-                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">{app.studentName}</h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-sm text-slate-900 dark:text-white">{app.studentName}</h4>
+                          <button
+                            onClick={() => onNavigate('portfolio', app.studentName.toLowerCase().replace(/\s+/g, '-'))}
+                            className="text-[10px] text-emerald-600 font-semibold hover:underline"
+                          >
+                            View Portfolio
+                          </button>
+                        </div>
                         <div className="text-xs text-slate-500">Applied for: {app.projectTitle}</div>
+
+                        {/* Applicant Earned Milestones */}
+                        {(() => {
+                          const sProfile = marketplaceStore.getStudentProfile(app.studentId);
+                          const sUser = marketplaceStore.getUsers().find((u) => u.id === app.studentId) || {
+                            id: app.studentId,
+                            name: app.studentName,
+                            email: '',
+                            role: 'STUDENT' as const,
+                            createdAt: app.createdAt,
+                          };
+                          if (!sProfile) return null;
+                          return (
+                            <div className="mt-1.5">
+                              <Badges profile={sProfile} user={sUser} variant="strip" />
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div>
@@ -835,27 +913,187 @@ export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate }) 
         </div>
       )}
 
-      {/* Tab 6: Payments */}
+      {/* Tab 6: Payments — Dual Track Ledger */}
       {activeTab === 'payments' && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Audited Business Payment Logs</h2>
-          <div className="space-y-4">
-            {payments.map((pay) => (
-              <div key={pay.id} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h4 className="font-bold text-sm text-slate-900 dark:text-white">{pay.projectTitle}</h4>
-                  <div className="text-xs text-slate-500 mt-0.5">
-                    Amount: ₹{pay.amountINR.toLocaleString('en-IN')} INR · {pay.paymentMethod} {pay.transactionReferenceUTR && `(UTR: ${pay.transactionReferenceUTR})`}
-                  </div>
-                </div>
-                <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase ${
-                  pay.status === 'PAID' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                }`}>
-                  {pay.status.replace('_', ' ')}
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                Business Financial & Settlement Records
+              </h2>
+              <p className="text-xs text-slate-500">
+                Phase 1 Beta separates direct creator earnings from platform commissions.
+              </p>
+            </div>
+
+            {/* Sub-tab Switcher */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl text-xs font-semibold">
+              <button
+                onClick={() => setPaymentSubTab('creator_payouts')}
+                className={`px-3.5 py-1.5 rounded-xl transition ${
+                  paymentSubTab === 'creator_payouts'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Direct Creator Payouts ({payments.length})
+              </button>
+              <button
+                onClick={() => setPaymentSubTab('platform_fees')}
+                className={`px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                  paymentSubTab === 'platform_fees'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Coins className="w-3.5 h-3.5" />
+                <span>Platform Commission ({commissions.length})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Sub-Track A: Direct Creator Payouts */}
+          {paymentSubTab === 'creator_payouts' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-slate-800/40 border border-indigo-100 dark:border-slate-800 text-xs text-indigo-900 dark:text-indigo-300 flex items-center gap-2">
+                <Info className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>
+                  <strong>Track A:</strong> Direct settlement between business and creator via UPI or IMPS. Log the valid bank UTR so the creator can confirm receipt.
                 </span>
               </div>
-            ))}
-          </div>
+
+              {payments.length === 0 ? (
+                <div className="p-12 text-center text-xs text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
+                  No creator payment records yet. Complete deliverables will generate payment entries here.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {payments.map((pay) => (
+                    <div
+                      key={pay.id}
+                      className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">{pay.projectTitle}</h4>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          Amount: <strong>₹{pay.amountINR.toLocaleString('en-IN')} INR</strong> · {pay.paymentMethod}{' '}
+                          {pay.transactionReferenceUTR && (
+                            <span className="font-mono text-slate-700 dark:text-slate-300">(UTR: {pay.transactionReferenceUTR})</span>
+                          )}
+                        </div>
+                        {pay.confirmedAt && (
+                          <div className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            <span>Creator confirmed receipt in bank account on {new Date(pay.confirmedAt).toLocaleDateString()}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span
+                          className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase ${
+                            pay.status === 'RECEIPT_CONFIRMED_BY_CREATOR' || pay.status === 'PAID'
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                              : pay.status === 'REPORTED_BY_BUSINESS'
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
+                              : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                          }`}
+                        >
+                          {pay.status.replace(/_/g, ' ')}
+                        </span>
+
+                        <button
+                          onClick={() => setPaymentProjectId(pay.projectId)}
+                          className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                        >
+                          {pay.transactionReferenceUTR ? 'Update UTR' : 'Record UTR'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sub-Track B: Platform Commission Fees */}
+          {paymentSubTab === 'platform_fees' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-800/40 text-xs text-emerald-900 dark:text-emerald-300 flex items-center gap-2">
+                <Coins className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  <strong>Track B:</strong> Business platform fee ({monetizationConfig.defaultCommissionRatePercent}% per project) payable directly to Proof-to-Pay upon milestone completion.
+                </span>
+              </div>
+
+              {commissions.length === 0 ? (
+                <div className="p-12 text-center text-xs text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
+                  No platform commission records generated yet.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {commissions.map((comm) => (
+                    <div
+                      key={comm.id}
+                      className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-sm text-slate-900 dark:text-white">{comm.projectTitle}</h4>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold">
+                            {comm.commissionRatePercent}% Rate
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          Agreed Budget: ₹{comm.projectBudgetINR.toLocaleString('en-IN')} INR · Platform Commission: <strong className="font-mono text-emerald-600 dark:text-emerald-400">₹{comm.platformFeeINR.toLocaleString('en-IN')} INR</strong>
+                        </div>
+                        {comm.reportedUTR && (
+                          <div className="text-[11px] text-slate-600 dark:text-slate-400 font-mono">
+                            Reported Evidence UTR: {comm.reportedUTR}
+                          </div>
+                        )}
+                        {comm.evidenceReviewedNotes && (
+                          <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                            Admin Verification: {comm.evidenceReviewedNotes}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span
+                          className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase ${
+                            comm.status === 'VERIFIED_COLLECTED'
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                              : comm.status === 'REPORTED_PAID'
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                              : comm.status === 'DUE'
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
+                              : comm.status === 'WAIVED'
+                              ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                              : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                          }`}
+                        >
+                          {comm.status.replace(/_/g, ' ')}
+                        </span>
+
+                        {comm.status !== 'VERIFIED_COLLECTED' && comm.status !== 'WAIVED' && (
+                          <button
+                            onClick={() => {
+                              setReportingCommissionModal(comm);
+                              setCommissionPaymentUTR(comm.reportedUTR || '');
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm transition"
+                          >
+                            {comm.reportedUTR ? 'Update Fee UTR' : 'Report Fee Payment'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -953,6 +1191,49 @@ export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate }) 
                 required
               />
             </div>
+
+            {/* Real-time Monetization Commission Breakdown */}
+            {(() => {
+              const ratePct = monetizationConfig.defaultCommissionRatePercent;
+              const feeAmount = Math.round(offerBudget * (ratePct / 100));
+              const totalOutlay = offerBudget + feeAmount;
+
+              return (
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between font-bold text-slate-900 dark:text-white">
+                    <span className="flex items-center gap-1.5">
+                      <Coins className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Transparent Fee Terms (Phase 1 Beta)</span>
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
+                      {ratePct}% Commission
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 text-slate-600 dark:text-slate-300">
+                    <div className="flex items-center justify-between">
+                      <span>Creator Agreed Payment:</span>
+                      <strong className="font-mono text-slate-900 dark:text-white">₹{offerBudget.toLocaleString('en-IN')} INR</strong>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Platform Commission ({ratePct}%):</span>
+                      <strong className="font-mono text-emerald-600 dark:text-emerald-400">₹{feeAmount.toLocaleString('en-IN')} INR</strong>
+                    </div>
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white">
+                      <span>Total Business Outlay:</span>
+                      <strong className="font-mono text-indigo-600 dark:text-indigo-400">₹{totalOutlay.toLocaleString('en-IN')} INR</strong>
+                    </div>
+                  </div>
+
+                  <div className="p-2 rounded-xl bg-emerald-500/10 text-[11px] text-emerald-700 dark:text-emerald-300 leading-relaxed flex items-start gap-1.5">
+                    <Info className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Responsible Party:</strong> The business pays the ₹{feeAmount.toLocaleString('en-IN')} platform fee separately to Proof-to-Pay upon completion. The creator receives 100% (₹{offerBudget.toLocaleString('en-IN')} INR) with ₹0 deductions.
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Agreed Delivery Date *</label>
@@ -1144,6 +1425,114 @@ export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate }) 
                 className="px-5 py-2 rounded-xl bg-emerald-600 text-white font-semibold text-xs"
               >
                 Publish Review
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Report Platform Commission Payment Modal */}
+      {reportingCommissionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <form
+            onSubmit={handleReportCommissionPayment}
+            className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <Coins className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                  Report Platform Commission Payment
+                </h3>
+                <span className="text-xs text-slate-500">{reportingCommissionModal.projectTitle}</span>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Agreed Project Budget:</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-white">
+                  ₹{reportingCommissionModal.projectBudgetINR.toLocaleString('en-IN')} INR
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Platform Commission Rate:</span>
+                <span className="font-bold text-emerald-600">
+                  {reportingCommissionModal.commissionRatePercent}%
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-700 font-bold">
+                <span className="text-slate-900 dark:text-white">Payable Platform Fee:</span>
+                <span className="font-mono text-emerald-600 dark:text-emerald-400 text-sm">
+                  ₹{reportingCommissionModal.platformFeeINR.toLocaleString('en-IN')} INR
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Settlement Payment Method *
+              </label>
+              <select
+                value={commissionPaymentMethod}
+                onChange={(e) => setCommissionPaymentMethod(e.target.value as any)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+              >
+                <option value="UPI">Direct UPI Transfer</option>
+                <option value="NEFT_IMPS">NEFT / IMPS NetBanking</option>
+                <option value="BANK_TRANSFER">Direct Current Account Transfer</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Transaction Reference UTR Number *
+              </label>
+              <input
+                type="text"
+                value={commissionPaymentUTR}
+                onChange={(e) => setCommissionPaymentUTR(e.target.value)}
+                placeholder="e.g. UTR-HDFC-9918230912"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Remittance Notes (Optional)
+              </label>
+              <input
+                type="text"
+                value={commissionPaymentNotes}
+                onChange={(e) => setCommissionPaymentNotes(e.target.value)}
+                placeholder="e.g. Paid via HDFC current account"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+              />
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed flex items-start gap-1.5">
+              <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+              <span>
+                <strong>Verification Notice:</strong> A UTR or bank reference number is evidence to review. The fee status will remain marked <em>Reported Paid</em> until an authorized administrator verifies the deposit.
+              </span>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setReportingCommissionModal(null)}
+                className="px-4 py-2 rounded-xl border border-slate-300 text-xs font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm transition"
+              >
+                Submit Fee Report
               </button>
             </div>
           </form>

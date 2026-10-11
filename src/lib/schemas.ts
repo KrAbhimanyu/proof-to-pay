@@ -70,6 +70,20 @@ export const ProjectOfferSchema = z.object({
   agreedDeadline: z.string().min(1, 'Deadline date is required'),
   agreedRevisions: z.coerce.number().min(1).max(5),
   scopeSummary: z.string().min(20, 'Explicitly summarize scope and acceptance criteria in the binding offer'),
+  cancellationTerms: z.string().min(15, 'Specify mutual cancellation and pro-rata deliverable terms').optional(),
+});
+
+export const ScopeChangeRequestSchema = z.object({
+  reason: z.string().min(15, 'Provide a clear rationale for the proposed scope change (at least 15 characters)'),
+  proposedBudgetINR: z.coerce.number().min(1000, 'Budget must be at least ₹1,000'),
+  proposedDeadline: z.string().min(1, 'Valid proposed deadline date is required'),
+  proposedRevisions: z.coerce.number().min(1).max(5),
+  proposedScopeSummary: z.string().min(15, 'Updated scope summary is required'),
+});
+
+export const ProofPassportVisibilitySchema = z.object({
+  isPublic: z.boolean(),
+  sanitizedSummary: z.string().min(10, 'Sanitized summary must be at least 10 characters').optional(),
 });
 
 export const WorkSubmissionSchema = z.object({

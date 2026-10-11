@@ -132,6 +132,28 @@ data class ProjectOffer(
     @SerialName("agreed_revisions") val agreedRevisions: Int = 2,
     @SerialName("scope_summary") val scopeSummary: String,
     val status: String = "PENDING",
+    @SerialName("commission_rate_percent") val commissionRatePercent: Double = 5.0,
+    @SerialName("platform_fee_inr") val platformFeeInr: Double = 0.0,
+    @SerialName("creator_receives_inr") val creatorReceivesInr: Double = 0.0,
+    @SerialName("fee_payer") val feePayer: String = "BUSINESS",
+    @SerialName("commission_terms_snapshot") val commissionTermsSnapshot: String? = null,
+    @SerialName("created_at") val createdAt: String? = null
+)
+
+@Serializable
+data class PlatformCommission(
+    val id: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("project_title") val projectTitle: String,
+    @SerialName("business_id") val businessId: String,
+    @SerialName("business_name") val businessName: String,
+    @SerialName("project_budget_inr") val projectBudgetInr: Double,
+    @SerialName("commission_rate_percent") val commissionRatePercent: Double = 5.0,
+    @SerialName("platform_fee_inr") val platformFeeInr: Double,
+    val status: String = "DUE",
+    @SerialName("due_date") val dueDate: String? = null,
+    @SerialName("reported_utr") val reportedUtr: String? = null,
+    @SerialName("evidence_reviewed_notes") val evidenceReviewedNotes: String? = null,
     @SerialName("created_at") val createdAt: String? = null
 )
 

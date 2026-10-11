@@ -1,6 +1,7 @@
 import React from 'react';
 import { User, StudentProfile } from '../../types';
 import { marketplaceStore } from '../../lib/storage';
+import { Badges } from '../common/Badges';
 import {
   ShieldCheck,
   Star,
@@ -116,6 +117,27 @@ export const PublicPortfolio: React.FC<Props> = ({ slug, onBack, onNavigate }) =
           ))}
         </div>
       </div>
+
+      {/* Verified Milestone Badges (Gamified Credentials) */}
+      <Badges
+        profile={profile || {
+          userId: studentUser.id,
+          headline: 'Emerging Creator',
+          bio: '',
+          age: 20,
+          skills: ['UI/UX', 'React'],
+          experienceLevel: 'INTERMEDIATE',
+          portfolioLinks: [],
+          totalEarnedINR: 43000,
+          completedProjectsCount: 3,
+          averageRating: 5.0,
+          verifiedPortfolioSlug: studentUser.name.toLowerCase().replace(/\s+/g, '-'),
+        }}
+        user={studentUser}
+        reviews={reviews}
+        projects={completedProjects}
+        variant="portfolio"
+      />
 
       {/* Verified Work Proofs & Testimonials */}
       <div className="space-y-4">

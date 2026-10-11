@@ -15,7 +15,17 @@ import {
   BetaMetricsReport,
   UserRole,
   VerificationStatus,
-  ProjectStatus
+  ProjectStatus,
+  PlatformCommissionRecord,
+  PlatformMonetizationConfig,
+  MonetizationMetrics,
+  ProjectPaymentStatus,
+  PlatformFeeStatus,
+  ProofPassportItem,
+  ScopeChangeRequest,
+  WorkTrailEvent,
+  WorkTrailEventType,
+  DeliverableItem
 } from '../types';
 import {
   INITIAL_USERS,
@@ -28,7 +38,11 @@ import {
   INITIAL_PAYMENTS,
   INITIAL_REVIEWS,
   INITIAL_DISPUTES,
-  INITIAL_AUDIT_LOGS
+  INITIAL_AUDIT_LOGS,
+  INITIAL_PLATFORM_COMMISSIONS,
+  INITIAL_MONETIZATION_CONFIG,
+  INITIAL_PROOF_PASSPORT_ITEMS,
+  INITIAL_SCOPE_CHANGE_REQUESTS
 } from './mockData';
 
 const STORAGE_KEYS = {
@@ -46,6 +60,10 @@ const STORAGE_KEYS = {
   BETA_FEEDBACK: 'ptp_beta_feedback',
   ABUSE_REPORTS: 'ptp_abuse_reports',
   CURRENT_USER_ID: 'ptp_current_user_id',
+  PLATFORM_COMMISSIONS: 'ptp_platform_commissions',
+  MONETIZATION_CONFIG: 'ptp_monetization_config',
+  PROOF_PASSPORT_ITEMS: 'ptp_proof_passport_items',
+  SCOPE_CHANGE_REQUESTS: 'ptp_scope_change_requests',
 };
 
 class MarketplaceStore {
@@ -85,6 +103,10 @@ class MarketplaceStore {
     this.set(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
     this.set(STORAGE_KEYS.DISPUTES, INITIAL_DISPUTES);
     this.set(STORAGE_KEYS.AUDIT_LOGS, INITIAL_AUDIT_LOGS);
+    this.set(STORAGE_KEYS.PLATFORM_COMMISSIONS, INITIAL_PLATFORM_COMMISSIONS);
+    this.set(STORAGE_KEYS.MONETIZATION_CONFIG, INITIAL_MONETIZATION_CONFIG);
+    this.set(STORAGE_KEYS.PROOF_PASSPORT_ITEMS, INITIAL_PROOF_PASSPORT_ITEMS);
+    this.set(STORAGE_KEYS.SCOPE_CHANGE_REQUESTS, INITIAL_SCOPE_CHANGE_REQUESTS);
     this.set(STORAGE_KEYS.CURRENT_USER_ID, 'student-1');
   }
 
@@ -307,18 +329,68 @@ class MarketplaceStore {
     return newApp;
   }
 
-  // --- Offers ---
+  // --- Offers & Monetization Snapshots ---
+  public getMonetizationConfig(): PlatformMonetizationConfig {
+    return this.get<PlatformMonetizationConfig>(STORAGE_KEYS.MONETIZATION_CONFIG, INITIAL_MONETIZATION_CONFIG);
+  }
+
+  public updateMonetizationConfig(adminUser: User, newRatePercent: number, paymentWindowDays = 5): PlatformMonetizationConfig {
+    if (adminUser.role !== 'ADMIN') throw new Error('Admin authorization required');
+    if (newRatePercent < 0 || newRatePercent > 50) {
+      throw new Error('Commission rate must be between 0% and 50%');
+    }
+
+    const current = this.getMonetizationConfig();
+    const updated: PlatformMonetizationConfig = {
+      ...current,
+      defaultCommissionRatePercent: newRatePercent,
+      paymentWindowDays,
+      updatedAt: new Date().toISOString(),
+      updatedByUserId: adminUser.id,
+    };
+
+    this.set(STORAGE_KEYS.MONETIZATION_CONFIG, updated);
+    this.logAudit(
+      adminUser,
+      'UPDATED_MONETIZATION_COMMISSION_RATE',
+      'USER',
+      adminUser.id,
+      `Updated platform default commission to ${newRatePercent}%. Existing accepted offers remain immutable.`
+    );
+    return updated;
+  }
+
   public getOffers(): ProjectOffer[] {
     return this.get<ProjectOffer[]>(STORAGE_KEYS.OFFERS, INITIAL_OFFERS);
   }
 
-  public issueOffer(businessUser: User, projectId: string, studentId: string, agreedBudgetINR: number, agreedDeadline: string, agreedRevisions: number, scopeSummary: string): ProjectOffer {
+  public issueOffer(
+    businessUser: User,
+    projectId: string,
+    studentId: string,
+    agreedBudgetINR: number,
+    agreedDeadline: string,
+    agreedRevisions: number,
+    scopeSummary: string,
+    cancellationTerms?: string,
+    deliverablesSnapshot?: DeliverableItem[]
+  ): ProjectOffer {
     if (businessUser.role !== 'BUSINESS') throw new Error('Unauthorized');
+    if (agreedBudgetINR <= 0) throw new Error('Agreed budget must be a positive amount in INR');
+
     const project = this.getProject(projectId);
     if (!project || project.businessId !== businessUser.id) throw new Error('Project not found or unauthorized');
 
     const student = this.getUsers().find((u) => u.id === studentId);
     if (!student) throw new Error('Student not found');
+
+    // Safe integer paise representation for financial precision
+    const config = this.getMonetizationConfig();
+    const ratePct = config.defaultCommissionRatePercent;
+    const budgetPaise = Math.round(agreedBudgetINR * 100);
+    const feePaise = Math.round((budgetPaise * ratePct) / 100);
+    const platformFeeINR = feePaise / 100;
+    const creatorReceivesINR = agreedBudgetINR; // Never reduced!
 
     const offers = this.getOffers();
     const newOffer: ProjectOffer = {
@@ -334,6 +406,14 @@ class MarketplaceStore {
       agreedRevisions,
       scopeSummary,
       status: 'PENDING',
+      commissionRatePercent: ratePct,
+      platformFeeINR,
+      creatorReceivesINR,
+      feePayer: 'BUSINESS',
+      commissionTermsSnapshot: `Agreed budget: ₹${agreedBudgetINR.toLocaleString('en-IN')} INR. Platform fee: ₹${platformFeeINR.toLocaleString('en-IN')} INR (${ratePct}%) payable separately by ${project.businessName} directly to Proof-to-Pay upon completion. Creator ${student.name} receives full ₹${agreedBudgetINR.toLocaleString('en-IN')} INR with ₹0 deductions.`,
+      cancellationTerms: cancellationTerms || 'Mutual cancellation permits pro-rata payment based on approved milestone deliverables. Unilateral cancellation without cause forfeits platform protections.',
+      deliverablesSnapshot: deliverablesSnapshot || project.deliverables,
+      scopeLocked: false,
       createdAt: new Date().toISOString(),
     };
 
@@ -347,11 +427,28 @@ class MarketplaceStore {
       this.set(STORAGE_KEYS.APPLICATIONS, apps);
     }
 
-    this.logAudit(businessUser, 'ISSUED_OFFER', 'PROJECT', projectId, `Offered ₹${agreedBudgetINR} to ${student.name}`);
+    this.logAudit(
+      businessUser,
+      'ISSUED_OFFER_WITH_COMMISSION',
+      'PROJECT',
+      projectId,
+      `Offered ₹${agreedBudgetINR} to ${student.name} (Platform fee: ₹${platformFeeINR} @ ${ratePct}%)`
+    );
     return newOffer;
   }
 
-  public respondToOffer(studentUser: User, offerId: string, accept: boolean): ProjectOffer {
+  public respondToOffer(
+    studentUser: User,
+    offerId: string,
+    accept: boolean,
+    acceptedChecklist?: {
+      deliverablesAgreed: boolean;
+      deadlineAgreed: boolean;
+      revisionsAgreed: boolean;
+      cancellationAgreed: boolean;
+      feeTermsAgreed: boolean;
+    }
+  ): ProjectOffer {
     if (studentUser.role !== 'STUDENT') throw new Error('Unauthorized');
     const offers = this.getOffers();
     const offer = offers.find((o) => o.id === offerId && o.studentId === studentUser.id);
@@ -359,6 +456,15 @@ class MarketplaceStore {
 
     offer.status = accept ? 'ACCEPTED' : 'DECLINED';
     offer.respondedAt = new Date().toISOString();
+    if (accept) {
+      offer.scopeLocked = true;
+      offer.lockedAt = new Date().toISOString();
+      offer.explicitAcceptedAt = new Date().toISOString();
+      offer.explicitAcceptedByStudent = true;
+      if (acceptedChecklist) {
+        offer.acceptedChecklist = acceptedChecklist;
+      }
+    }
     this.set(STORAGE_KEYS.OFFERS, offers);
 
     // Update project state if accepted
@@ -372,27 +478,62 @@ class MarketplaceStore {
       proj.budgetINR = offer.agreedBudgetINR;
       proj.expectedDeliveryDate = offer.agreedDeadline;
       proj.permittedRevisions = offer.agreedRevisions;
+      if (offer.deliverablesSnapshot) {
+        proj.deliverables = offer.deliverablesSnapshot;
+      }
       proj.updatedAt = new Date().toISOString();
       this.set(STORAGE_KEYS.PROJECTS, projects);
 
-      // Initialize payment record as NOT_DUE
+      // Record A: Initialize Business-to-Creator project payment record as NOT_REPORTED
       const payments = this.getPayments();
-      const newPayment: PaymentRecord = {
-        id: `pay-${offer.projectId}`,
-        projectId: offer.projectId,
-        projectTitle: proj.title,
-        businessId: offer.businessId,
-        studentId: studentUser.id,
-        amountINR: offer.agreedBudgetINR,
-        status: 'NOT_DUE',
-        paymentMethod: 'UPI',
-        recordedByUserId: offer.businessId,
-        notes: `Agreed terms: ₹${offer.agreedBudgetINR} INR upon client sign-off.`,
-      };
-      this.set(STORAGE_KEYS.PAYMENTS, [newPayment, ...payments]);
+      const existingPay = payments.find((p) => p.projectId === offer.projectId);
+      if (!existingPay) {
+        const newPayment: PaymentRecord = {
+          id: `pay-${offer.projectId}`,
+          projectId: offer.projectId,
+          projectTitle: proj.title,
+          businessId: offer.businessId,
+          studentId: studentUser.id,
+          amountINR: offer.agreedBudgetINR,
+          status: 'NOT_REPORTED',
+          paymentMethod: 'UPI',
+          recordedByUserId: offer.businessId,
+          notes: `Direct project payout: ₹${offer.agreedBudgetINR.toLocaleString('en-IN')} INR due to ${studentUser.name} upon final acceptance.`,
+        };
+        this.set(STORAGE_KEYS.PAYMENTS, [newPayment, ...payments]);
+      }
+
+      // Record B: Initialize Business-to-Platform Commission Record as NOT_DUE
+      const commissions = this.getPlatformCommissions();
+      const existingComm = commissions.find((c) => c.projectId === offer.projectId);
+      if (!existingComm) {
+        const newCommission: PlatformCommissionRecord = {
+          id: `comm-${offer.projectId}`,
+          projectId: offer.projectId,
+          projectTitle: proj.title,
+          businessId: offer.businessId,
+          businessName: offer.businessName,
+          studentId: studentUser.id,
+          studentName: studentUser.name,
+          projectBudgetINR: offer.agreedBudgetINR,
+          commissionRatePercent: offer.commissionRatePercent || 5,
+          platformFeeINR: offer.platformFeeINR,
+          status: 'NOT_DUE',
+          dueDate: offer.agreedDeadline,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        this.set(STORAGE_KEYS.PLATFORM_COMMISSIONS, [newCommission, ...commissions]);
+      }
     }
 
-    this.logAudit(studentUser, accept ? 'ACCEPTED_OFFER' : 'DECLINED_OFFER', 'PROJECT', offer.projectId, `Offer ${accept ? 'accepted' : 'declined'}`);
+    this.logAudit(
+      studentUser,
+      accept ? 'ACCEPTED_OFFER_SCOPE_LOCKED' : 'DECLINED_OFFER',
+      'PROJECT',
+      offer.projectId,
+      `Offer ${accept ? 'accepted with Scope Lock executed' : 'declined'}`
+    );
     return offer;
   }
 
@@ -496,16 +637,44 @@ class MarketplaceStore {
       this.set(STORAGE_KEYS.PAYMENTS, payments);
     }
 
+    // Move platform commission record to DUE
+    const commissions = this.getPlatformCommissions();
+    const comm = commissions.find((c) => c.projectId === projectId);
+    if (comm) {
+      comm.status = 'DUE';
+      const config = this.getMonetizationConfig();
+      comm.dueDate = new Date(Date.now() + config.paymentWindowDays * 86400000).toISOString().split('T')[0];
+      comm.updatedAt = new Date().toISOString();
+      this.set(STORAGE_KEYS.PLATFORM_COMMISSIONS, commissions);
+    }
+
+    // Proof Passport: Create or update verified completion record
+    this.createOrUpdateProofPassportItem(proj, 'BUSINESS_APPROVAL');
+
     this.logAudit(businessUser, 'APPROVED_DELIVERABLE_COMPLETED', 'PROJECT', projectId, `Approved deliverable for "${proj.title}"`);
   }
 
-  // --- Payments ---
+  // --- Financial Record A: Business-to-Creator Project Payments ---
   public getPayments(): PaymentRecord[] {
     return this.get<PaymentRecord[]>(STORAGE_KEYS.PAYMENTS, INITIAL_PAYMENTS);
   }
 
   public recordPayment(businessUser: User, projectId: string, utrReference: string, paymentMethod: PaymentRecord['paymentMethod'] = 'UPI', notes?: string): PaymentRecord {
+    return this.reportProjectPayment(businessUser, projectId, utrReference, paymentMethod, notes);
+  }
+
+  public reportProjectPayment(
+    businessUser: User,
+    projectId: string,
+    utrReference: string,
+    paymentMethod: PaymentRecord['paymentMethod'] = 'UPI',
+    notes?: string
+  ): PaymentRecord {
     if (businessUser.role !== 'BUSINESS' && businessUser.role !== 'ADMIN') throw new Error('Unauthorized');
+    if (!utrReference || utrReference.trim().length < 4) {
+      throw new Error('A valid bank transaction reference or UPI UTR number is required');
+    }
+
     const proj = this.getProject(projectId);
     if (!proj) throw new Error('Project not found');
 
@@ -519,17 +688,17 @@ class MarketplaceStore {
         businessId: proj.businessId,
         studentId: proj.selectedStudentId || '',
         amountINR: proj.budgetINR,
-        status: 'PAID',
+        status: 'REPORTED_BY_BUSINESS',
         paymentMethod,
-        transactionReferenceUTR: utrReference,
+        transactionReferenceUTR: utrReference.trim(),
         recordedByUserId: businessUser.id,
         recordedAt: new Date().toISOString(),
         notes,
       };
       payments.unshift(pay);
     } else {
-      pay.status = 'PAID';
-      pay.transactionReferenceUTR = utrReference;
+      pay.status = 'REPORTED_BY_BUSINESS';
+      pay.transactionReferenceUTR = utrReference.trim();
       pay.paymentMethod = paymentMethod;
       pay.recordedByUserId = businessUser.id;
       pay.recordedAt = new Date().toISOString();
@@ -538,7 +707,7 @@ class MarketplaceStore {
 
     this.set(STORAGE_KEYS.PAYMENTS, payments);
 
-    // Update student earnings & stats
+    // Update student earnings & count upon payment reporting
     if (proj.selectedStudentId) {
       const studentProfile = this.getStudentProfile(proj.selectedStudentId);
       if (studentProfile) {
@@ -548,8 +717,235 @@ class MarketplaceStore {
       }
     }
 
-    this.logAudit(businessUser, 'RECORDED_PAYMENT_UTR', 'PAYMENT', pay.id, `Recorded ₹${proj.budgetINR} INR with reference ${utrReference}`);
+    this.logAudit(
+      businessUser,
+      'REPORTED_CREATOR_PAYMENT_UTR',
+      'PAYMENT',
+      pay.id,
+      `Reported ₹${proj.budgetINR} INR creator payment via ${paymentMethod} (UTR: ${utrReference})`
+    );
     return pay;
+  }
+
+  public confirmProjectPaymentReceipt(studentUser: User, projectId: string): PaymentRecord {
+    if (studentUser.role !== 'STUDENT') throw new Error('Unauthorized');
+    const payments = this.getPayments();
+    const pay = payments.find((p) => p.projectId === projectId && p.studentId === studentUser.id);
+    if (!pay) throw new Error('Payment record not found for this creator');
+
+    pay.status = 'RECEIPT_CONFIRMED_BY_CREATOR';
+    pay.confirmedAt = new Date().toISOString();
+    pay.confirmedByUserId = studentUser.id;
+    this.set(STORAGE_KEYS.PAYMENTS, payments);
+
+    this.logAudit(
+      studentUser,
+      'CONFIRMED_PAYMENT_RECEIPT',
+      'PAYMENT',
+      pay.id,
+      `Creator confirmed receipt of ₹${pay.amountINR} INR in bank/UPI.`
+    );
+    return pay;
+  }
+
+  public disputeProjectPayment(user: User, projectId: string, reason: string): PaymentRecord {
+    const payments = this.getPayments();
+    const pay = payments.find((p) => p.projectId === projectId);
+    if (!pay) throw new Error('Payment record not found');
+    if (user.id !== pay.studentId && user.id !== pay.businessId && user.role !== 'ADMIN') {
+      throw new Error('Unauthorized');
+    }
+
+    pay.status = 'DISPUTED';
+    pay.disputeReason = reason;
+    this.set(STORAGE_KEYS.PAYMENTS, payments);
+
+    this.logAudit(user, 'DISPUTED_PROJECT_PAYMENT', 'PAYMENT', pay.id, `Payment disputed: ${reason}`);
+    return pay;
+  }
+
+  // --- Financial Record B: Business-to-Platform Commission Fees ---
+  public getPlatformCommissions(): PlatformCommissionRecord[] {
+    return this.get<PlatformCommissionRecord[]>(STORAGE_KEYS.PLATFORM_COMMISSIONS, INITIAL_PLATFORM_COMMISSIONS);
+  }
+
+  public getPlatformCommissionForProject(projectId: string): PlatformCommissionRecord | null {
+    return this.getPlatformCommissions().find((c) => c.projectId === projectId) || null;
+  }
+
+  public reportPlatformCommissionPayment(
+    businessUser: User,
+    commissionId: string,
+    utrReference: string,
+    paymentMethod: PlatformCommissionRecord['paymentMethod'] = 'UPI',
+    notes?: string
+  ): PlatformCommissionRecord {
+    if (businessUser.role !== 'BUSINESS' && businessUser.role !== 'ADMIN') throw new Error('Unauthorized');
+    if (!utrReference || utrReference.trim().length < 4) {
+      throw new Error('Valid bank transfer reference or UTR number is required as evidence');
+    }
+
+    const commissions = this.getPlatformCommissions();
+    const comm = commissions.find((c) => c.id === commissionId);
+    if (!comm) throw new Error('Platform commission invoice not found');
+    if (comm.businessId !== businessUser.id && businessUser.role !== 'ADMIN') throw new Error('Unauthorized');
+
+    comm.status = 'REPORTED_PAID';
+    comm.reportedUTR = utrReference.trim();
+    comm.reportedAt = new Date().toISOString();
+    comm.paymentMethod = paymentMethod;
+    if (notes) comm.reportedNotes = notes;
+    comm.updatedAt = new Date().toISOString();
+
+    this.set(STORAGE_KEYS.PLATFORM_COMMISSIONS, commissions);
+
+    this.logAudit(
+      businessUser,
+      'REPORTED_PLATFORM_COMMISSION_PAYMENT',
+      'PAYMENT',
+      comm.id,
+      `Reported ₹${comm.platformFeeINR} INR platform fee payment with UTR ${utrReference}. Awaiting administrative verification.`
+    );
+    return comm;
+  }
+
+  public adminVerifyPlatformCommission(
+    adminUser: User,
+    commissionId: string,
+    evidenceReviewedNotes: string
+  ): PlatformCommissionRecord {
+    if (adminUser.role !== 'ADMIN') throw new Error('Admin authorization required');
+    if (!evidenceReviewedNotes || evidenceReviewedNotes.trim().length < 5) {
+      throw new Error('Please describe the evidence reviewed (e.g. Bank statement credit verification)');
+    }
+
+    const commissions = this.getPlatformCommissions();
+    const comm = commissions.find((c) => c.id === commissionId);
+    if (!comm) throw new Error('Commission record not found');
+
+    comm.status = 'VERIFIED_COLLECTED';
+    comm.verifiedByUserId = adminUser.id;
+    comm.verifiedByName = adminUser.name;
+    comm.verifiedAt = new Date().toISOString();
+    comm.evidenceReviewedNotes = evidenceReviewedNotes.trim();
+    comm.updatedAt = new Date().toISOString();
+
+    this.set(STORAGE_KEYS.PLATFORM_COMMISSIONS, commissions);
+
+    this.logAudit(
+      adminUser,
+      'VERIFIED_PLATFORM_COMMISSION_COLLECTED',
+      'PAYMENT',
+      comm.id,
+      `Verified ₹${comm.platformFeeINR} INR collected. Evidence: "${evidenceReviewedNotes.trim()}".`
+    );
+    return comm;
+  }
+
+  public adminWaivePlatformCommission(
+    adminUser: User,
+    commissionId: string,
+    waiverReason: string
+  ): PlatformCommissionRecord {
+    if (adminUser.role !== 'ADMIN') throw new Error('Admin authorization required');
+    if (!waiverReason || waiverReason.trim().length < 5) {
+      throw new Error('Formal administrative justification required to waive platform fee');
+    }
+
+    const commissions = this.getPlatformCommissions();
+    const comm = commissions.find((c) => c.id === commissionId);
+    if (!comm) throw new Error('Commission record not found');
+
+    comm.status = 'WAIVED';
+    comm.waiverReason = waiverReason.trim();
+    comm.waivedByUserId = adminUser.id;
+    comm.waivedAt = new Date().toISOString();
+    comm.updatedAt = new Date().toISOString();
+
+    this.set(STORAGE_KEYS.PLATFORM_COMMISSIONS, commissions);
+
+    this.logAudit(
+      adminUser,
+      'WAIVED_PLATFORM_COMMISSION',
+      'PAYMENT',
+      comm.id,
+      `Waived ₹${comm.platformFeeINR} INR fee. Reason: "${waiverReason.trim()}".`
+    );
+    return comm;
+  }
+
+  public adminAdjustPlatformCommission(
+    adminUser: User,
+    commissionId: string,
+    adjustedFeeINR: number,
+    adjustmentReason: string
+  ): PlatformCommissionRecord {
+    if (adminUser.role !== 'ADMIN') throw new Error('Admin authorization required');
+    if (adjustedFeeINR < 0) throw new Error('Adjusted fee cannot be negative');
+
+    const commissions = this.getPlatformCommissions();
+    const comm = commissions.find((c) => c.id === commissionId);
+    if (!comm) throw new Error('Commission record not found');
+
+    const oldAmount = comm.platformFeeINR;
+    comm.adjustmentAmountINR = adjustedFeeINR;
+    comm.adjustmentReason = adjustmentReason;
+    comm.platformFeeINR = adjustedFeeINR;
+    comm.status = 'REFUNDED_OR_ADJUSTED';
+    comm.updatedAt = new Date().toISOString();
+
+    this.set(STORAGE_KEYS.PLATFORM_COMMISSIONS, commissions);
+
+    this.logAudit(
+      adminUser,
+      'ADJUSTED_PLATFORM_COMMISSION',
+      'PAYMENT',
+      comm.id,
+      `Adjusted fee from ₹${oldAmount} to ₹${adjustedFeeINR} INR. Reason: "${adjustmentReason}".`
+    );
+    return comm;
+  }
+
+  public getMonetizationMetrics(): MonetizationMetrics {
+    const projects = this.getProjects();
+    const commissions = this.getPlatformCommissions();
+    const completedProjects = projects.filter((p) => p.status === 'COMPLETED');
+
+    const totalAgreed = commissions.reduce((sum, c) => sum + c.projectBudgetINR, 0);
+
+    const verifiedCollected = commissions
+      .filter((c) => c.status === 'VERIFIED_COLLECTED')
+      .reduce((sum, c) => sum + c.platformFeeINR, 0);
+
+    const reportedPaid = commissions
+      .filter((c) => c.status === 'REPORTED_PAID')
+      .reduce((sum, c) => sum + c.platformFeeINR, 0);
+
+    const due = commissions
+      .filter((c) => c.status === 'DUE')
+      .reduce((sum, c) => sum + c.platformFeeINR, 0);
+
+    const overdue = commissions
+      .filter((c) => c.status === 'OVERDUE')
+      .reduce((sum, c) => sum + c.platformFeeINR, 0);
+
+    const waived = commissions
+      .filter((c) => c.status === 'WAIVED')
+      .reduce((sum, c) => sum + c.platformFeeINR, 0);
+
+    const totalChargeable = verifiedCollected + due + overdue;
+    const collectionRate = totalChargeable > 0 ? Math.round((verifiedCollected / totalChargeable) * 100) : 100;
+
+    return {
+      completedProjectsCount: completedProjects.length,
+      totalAgreedProjectValueINR: totalAgreed,
+      commissionDueINR: due,
+      commissionReportedPaidINR: reportedPaid,
+      commissionVerifiedCollectedINR: verifiedCollected,
+      overdueFeesINR: overdue,
+      waivedFeesINR: waived,
+      feeCollectionRatePercent: collectionRate,
+    };
   }
 
   // --- Reviews ---
@@ -643,7 +1039,537 @@ class MarketplaceStore {
     disp.resolvedAt = new Date().toISOString();
     this.set(STORAGE_KEYS.DISPUTES, disputes);
 
+    // If dispute ruled in favor of student, record verified completion in Proof Passport
+    if (decision === 'RESOLVED_STUDENT_PAID') {
+      const proj = this.getProject(disp.projectId);
+      if (proj) {
+        this.createOrUpdateProofPassportItem(proj, 'DISPUTE_RESOLUTION', 5, decisionNotes);
+      }
+    }
+
     this.logAudit(adminUser, 'RESOLVED_DISPUTE', 'DISPUTE', disputeId, `Decision: ${decision} — ${decisionNotes}`);
+  }
+
+  // --- Proof Passport: Verified Project Credentials ---
+  public getProofPassportItems(studentId?: string, onlyPublic: boolean = false): ProofPassportItem[] {
+    const items = this.get<ProofPassportItem[]>(STORAGE_KEYS.PROOF_PASSPORT_ITEMS, INITIAL_PROOF_PASSPORT_ITEMS);
+    return items.filter((item) => {
+      if (studentId && item.studentId !== studentId) return false;
+      if (onlyPublic && !item.isPublic) return false;
+      return true;
+    });
+  }
+
+  public toggleProofPassportVisibility(user: User, itemId: string, isPublic: boolean): ProofPassportItem {
+    const items = this.getProofPassportItems();
+    const item = items.find((i) => i.id === itemId);
+    if (!item) throw new Error('Proof Passport record not found');
+    if (item.studentId !== user.id && user.role !== 'ADMIN') throw new Error('Unauthorized to modify this portfolio item');
+    item.isPublic = isPublic;
+    this.set(STORAGE_KEYS.PROOF_PASSPORT_ITEMS, items);
+    this.logAudit(user, isPublic ? 'PROOF_PASSPORT_PUBLIC' : 'PROOF_PASSPORT_HIDDEN', 'PROJECT', item.projectId, `Toggled Proof Passport visibility to ${isPublic ? 'Public' : 'Hidden'}`);
+    return item;
+  }
+
+  public updateProofPassportItem(
+    user: User,
+    itemId: string,
+    updates: { sanitizedSummary?: string; isPublic?: boolean; displayOrder?: number }
+  ): ProofPassportItem {
+    const items = this.getProofPassportItems();
+    const item = items.find((i) => i.id === itemId);
+    if (!item) throw new Error('Proof Passport record not found');
+    if (item.studentId !== user.id && user.role !== 'ADMIN') throw new Error('Unauthorized');
+    if (updates.sanitizedSummary !== undefined) item.sanitizedSummary = updates.sanitizedSummary;
+    if (updates.isPublic !== undefined) item.isPublic = updates.isPublic;
+    if (updates.displayOrder !== undefined) item.displayOrder = updates.displayOrder;
+    this.set(STORAGE_KEYS.PROOF_PASSPORT_ITEMS, items);
+    return item;
+  }
+
+  public createOrUpdateProofPassportItem(
+    project: ProjectListing,
+    source: 'BUSINESS_APPROVAL' | 'DISPUTE_RESOLUTION' = 'BUSINESS_APPROVAL',
+    rating?: number,
+    reviewSnippet?: string
+  ): ProofPassportItem | null {
+    if (!project.selectedStudentId) return null;
+    const items = this.getProofPassportItems();
+    let existing = items.find((i) => i.projectId === project.id && i.studentId === project.selectedStudentId);
+    if (existing) {
+      existing.completionSource = source;
+      if (rating) existing.rating = rating;
+      if (reviewSnippet) existing.reviewSnippet = reviewSnippet;
+      existing.completedAt = new Date().toISOString();
+      this.set(STORAGE_KEYS.PROOF_PASSPORT_ITEMS, items);
+      return existing;
+    }
+
+    const sanitizedSummary = project.deliverables.map((d) => d.title).join(', ') || project.summary;
+    const newItem: ProofPassportItem = {
+      id: `passport-${project.id}`,
+      studentId: project.selectedStudentId,
+      projectId: project.id,
+      projectTitle: project.title,
+      category: project.category,
+      completedAt: new Date().toISOString(),
+      completionSource: source,
+      businessName: project.businessName,
+      businessCity: project.businessCity,
+      sanitizedSummary: `Delivered verified outcomes: ${sanitizedSummary}`,
+      rating: rating || 5,
+      reviewSnippet: reviewSnippet || 'Project successfully completed and accepted per agreed specifications.',
+      isPublic: true,
+      displayOrder: items.length + 1,
+      badgeTitle: source === 'DISPUTE_RESOLUTION' ? 'Dispute Confirmed Outcome' : 'Verified Work Delivery',
+      createdAt: new Date().toISOString(),
+    };
+
+    this.set(STORAGE_KEYS.PROOF_PASSPORT_ITEMS, [newItem, ...items]);
+    return newItem;
+  }
+
+  // --- Scope Lock & Change Request Workflow ---
+  public getScopeChangeRequests(projectId?: string): ScopeChangeRequest[] {
+    const requests = this.get<ScopeChangeRequest[]>(STORAGE_KEYS.SCOPE_CHANGE_REQUESTS, INITIAL_SCOPE_CHANGE_REQUESTS);
+    if (projectId) {
+      return requests.filter((r) => r.projectId === projectId);
+    }
+    return requests;
+  }
+
+  public createScopeChangeRequest(
+    user: User,
+    data: {
+      projectId: string;
+      reason: string;
+      proposedBudgetINR: number;
+      proposedDeadline: string;
+      proposedRevisions: number;
+      proposedDeliverables: DeliverableItem[];
+      proposedScopeSummary: string;
+    }
+  ): ScopeChangeRequest {
+    const proj = this.getProject(data.projectId);
+    if (!proj) throw new Error('Project not found');
+    if (proj.status !== 'IN_PROGRESS' && proj.status !== 'REVISION_REQUESTED') {
+      throw new Error('Scope modifications can only be requested for active projects');
+    }
+    if (user.id !== proj.businessId && user.id !== proj.selectedStudentId && user.role !== 'ADMIN') {
+      throw new Error('Unauthorized to modify this project scope');
+    }
+
+    const offers = this.getOffers();
+    const offer = offers.find((o) => o.projectId === data.projectId && o.status === 'ACCEPTED');
+    if (!offer) throw new Error('No active accepted offer found for this project');
+
+    const existingPending = this.getScopeChangeRequests(data.projectId).find((r) => r.status === 'PENDING');
+    if (existingPending) {
+      throw new Error('A scope change request is already pending review for this project');
+    }
+
+    const newRequest: ScopeChangeRequest = {
+      id: `scr-${Date.now()}`,
+      projectId: data.projectId,
+      offerId: offer.id,
+      requestedByUserId: user.id,
+      requestedByName: user.name,
+      requestedByRole: user.role,
+      reason: data.reason.trim(),
+      proposedBudgetINR: data.proposedBudgetINR,
+      proposedDeadline: data.proposedDeadline,
+      proposedRevisions: data.proposedRevisions,
+      proposedDeliverables: data.proposedDeliverables,
+      proposedScopeSummary: data.proposedScopeSummary.trim(),
+      previousTermsSnapshot: {
+        budgetINR: proj.budgetINR,
+        deadline: proj.expectedDeliveryDate,
+        revisions: proj.permittedRevisions,
+        scopeSummary: offer.scopeSummary,
+        deliverables: proj.deliverables,
+      },
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+    };
+
+    const requests = this.getScopeChangeRequests();
+    this.set(STORAGE_KEYS.SCOPE_CHANGE_REQUESTS, [newRequest, ...requests]);
+
+    this.logAudit(
+      user,
+      'SCOPE_CHANGE_REQUESTED',
+      'PROJECT',
+      data.projectId,
+      `Proposed scope change: Budget ₹${data.proposedBudgetINR} INR, Deadline: ${data.proposedDeadline}. Reason: "${data.reason.substring(0, 60)}..."`
+    );
+    return newRequest;
+  }
+
+  public respondToScopeChangeRequest(
+    user: User,
+    requestId: string,
+    accept: boolean,
+    rejectionReason?: string
+  ): ScopeChangeRequest {
+    const requests = this.getScopeChangeRequests();
+    const req = requests.find((r) => r.id === requestId);
+    if (!req) throw new Error('Scope change request not found');
+    if (req.status !== 'PENDING') throw new Error(`Scope change request is already ${req.status}`);
+
+    const proj = this.getProject(req.projectId);
+    if (!proj) throw new Error('Project not found');
+
+    // Only counterparty or admin can respond
+    if (req.requestedByUserId === user.id && user.role !== 'ADMIN') {
+      throw new Error('Cannot respond to your own scope change proposal');
+    }
+    if (user.id !== proj.businessId && user.id !== proj.selectedStudentId && user.role !== 'ADMIN') {
+      throw new Error('Unauthorized');
+    }
+
+    req.status = accept ? 'ACCEPTED' : 'REJECTED';
+    req.respondedAt = new Date().toISOString();
+    req.respondedByUserId = user.id;
+    if (!accept && rejectionReason) {
+      req.rejectionReason = rejectionReason;
+    }
+
+    this.set(STORAGE_KEYS.SCOPE_CHANGE_REQUESTS, requests);
+
+    if (accept) {
+      // Atomic update of project terms
+      const projects = this.getProjects();
+      const targetProj = projects.find((p) => p.id === req.projectId);
+      if (targetProj) {
+        targetProj.budgetINR = req.proposedBudgetINR;
+        targetProj.expectedDeliveryDate = req.proposedDeadline;
+        targetProj.permittedRevisions = req.proposedRevisions;
+        targetProj.deliverables = req.proposedDeliverables;
+        targetProj.summary = req.proposedScopeSummary;
+        targetProj.updatedAt = new Date().toISOString();
+        this.set(STORAGE_KEYS.PROJECTS, projects);
+      }
+
+      // Update offer snapshot
+      const offers = this.getOffers();
+      const targetOffer = offers.find((o) => o.id === req.offerId);
+      const config = this.getMonetizationConfig();
+      const ratePct = targetOffer?.commissionRatePercent || config.defaultCommissionRatePercent;
+      const budgetPaise = Math.round(req.proposedBudgetINR * 100);
+      const feePaise = Math.round((budgetPaise * ratePct) / 100);
+      const newPlatformFeeINR = feePaise / 100;
+
+      if (targetOffer) {
+        targetOffer.agreedBudgetINR = req.proposedBudgetINR;
+        targetOffer.agreedDeadline = req.proposedDeadline;
+        targetOffer.agreedRevisions = req.proposedRevisions;
+        targetOffer.deliverablesSnapshot = req.proposedDeliverables;
+        targetOffer.scopeSummary = req.proposedScopeSummary;
+        targetOffer.platformFeeINR = newPlatformFeeINR;
+        targetOffer.creatorReceivesINR = req.proposedBudgetINR;
+        targetOffer.commissionTermsSnapshot = `Agreed budget: ₹${req.proposedBudgetINR.toLocaleString('en-IN')} INR (Updated via Scope Change Request ${req.id}). Platform fee: ₹${newPlatformFeeINR.toLocaleString('en-IN')} INR (${ratePct}%) payable separately by ${proj.businessName}. Creator receives full ₹${req.proposedBudgetINR.toLocaleString('en-IN')} INR.`;
+        this.set(STORAGE_KEYS.OFFERS, offers);
+      }
+
+      // Update payment record amount
+      const payments = this.getPayments();
+      const pay = payments.find((p) => p.projectId === req.projectId);
+      if (pay && pay.status === 'NOT_REPORTED') {
+        pay.amountINR = req.proposedBudgetINR;
+        this.set(STORAGE_KEYS.PAYMENTS, payments);
+      }
+
+      // Update platform commission record amount
+      const commissions = this.getPlatformCommissions();
+      const comm = commissions.find((c) => c.projectId === req.projectId);
+      if (comm && (comm.status === 'NOT_DUE' || comm.status === 'DUE')) {
+        comm.projectBudgetINR = req.proposedBudgetINR;
+        comm.platformFeeINR = newPlatformFeeINR;
+        comm.dueDate = req.proposedDeadline;
+        comm.updatedAt = new Date().toISOString();
+        this.set(STORAGE_KEYS.PLATFORM_COMMISSIONS, commissions);
+      }
+
+      this.logAudit(
+        user,
+        'SCOPE_CHANGE_ACCEPTED',
+        'PROJECT',
+        req.projectId,
+        `Accepted scope change: New budget ₹${req.proposedBudgetINR} INR, Deadline ${req.proposedDeadline}.`
+      );
+    } else {
+      this.logAudit(
+        user,
+        'SCOPE_CHANGE_REJECTED',
+        'PROJECT',
+        req.projectId,
+        `Rejected scope change proposal. Reason: "${rejectionReason || 'Declined by counterparty'}"`
+      );
+    }
+
+    return req;
+  }
+
+  // --- Work Trail: Chronological Milestone & Financial Trail ---
+  public getWorkTrail(projectId: string): WorkTrailEvent[] {
+    const events: WorkTrailEvent[] = [];
+    const proj = this.getProject(projectId);
+    if (!proj) return [];
+
+    // 1. Project Creation
+    events.push({
+      id: `trail-proj-create-${proj.id}`,
+      projectId,
+      eventType: 'PROJECT_CREATED',
+      title: 'Project Listing Created & Scoped',
+      description: `Created by ${proj.businessName} with ₹${proj.budgetINR.toLocaleString('en-IN')} INR budget and ${proj.deliverables.length} concrete deliverables.`,
+      timestamp: proj.createdAt,
+      actorName: proj.businessName,
+      actorRole: 'BUSINESS',
+      isVerified: proj.businessVerified,
+      verificationNote: proj.businessVerified ? 'Business identity and legal entity verified' : 'Unverified entity',
+    });
+
+    // 2. Applications
+    const apps = this.getApplications().filter((a) => a.projectId === projectId);
+    apps.forEach((app) => {
+      events.push({
+        id: `trail-app-${app.id}`,
+        projectId,
+        eventType: 'APPLICATION_SUBMITTED',
+        title: `Application Submitted by ${app.studentName}`,
+        description: `Proposed delivery in ${app.proposedDeliveryDays} days with ${app.portfolioSamples.length} work samples. Status: ${app.status}.`,
+        timestamp: app.createdAt,
+        actorName: app.studentName,
+        actorRole: 'STUDENT',
+        isVerified: true,
+        verificationNote: '18+ adult age verified creator',
+      });
+    });
+
+    // 3. Offers & Scope Lock
+    const offers = this.getOffers().filter((o) => o.projectId === projectId);
+    offers.forEach((offer) => {
+      events.push({
+        id: `trail-offer-${offer.id}`,
+        projectId,
+        eventType: 'OFFER_EXTENDED',
+        title: 'Binding Project Offer Extended',
+        description: `Budget: ₹${offer.agreedBudgetINR.toLocaleString('en-IN')} INR | Deadline: ${offer.agreedDeadline} | Permitted Revisions: ${offer.agreedRevisions} cycles. Platform fee: ₹${offer.platformFeeINR.toLocaleString('en-IN')} INR (${offer.commissionRatePercent}%) paid separately by business.`,
+        timestamp: offer.createdAt,
+        actorName: offer.businessName,
+        actorRole: 'BUSINESS',
+        isVerified: true,
+        verificationNote: 'Snapshot locked with immutable fee terms',
+      });
+
+      if (offer.status === 'ACCEPTED' && offer.respondedAt) {
+        events.push({
+          id: `trail-offer-accept-${offer.id}`,
+          projectId,
+          eventType: 'SCOPE_LOCKED_ACCEPTED',
+          title: 'Scope Locked & Offer Explicitly Accepted',
+          description: `Creator ${offer.studentName} reviewed and explicitly accepted all terms: deliverables, deadline, permitted revisions, 100% net compensation guarantee, and cancellation policy.`,
+          timestamp: offer.respondedAt,
+          actorName: offer.studentName,
+          actorRole: 'STUDENT',
+          isVerified: true,
+          verificationNote: 'Mutual binding agreement executed under Proof-to-Pay rules',
+        });
+      }
+    });
+
+    // 4. Scope Change Requests
+    const scopeChanges = this.getScopeChangeRequests(projectId);
+    scopeChanges.forEach((sc) => {
+      events.push({
+        id: `trail-sc-req-${sc.id}`,
+        projectId,
+        eventType: 'SCOPE_CHANGE_REQUESTED',
+        title: `Scope Change Requested by ${sc.requestedByName}`,
+        description: `Proposed: Budget ₹${sc.proposedBudgetINR.toLocaleString('en-IN')} INR, Deadline: ${sc.proposedDeadline}. Reason: "${sc.reason}"`,
+        timestamp: sc.createdAt,
+        actorName: sc.requestedByName,
+        actorRole: sc.requestedByRole,
+        isVerified: false,
+        verificationNote: 'Pending mutual agreement',
+      });
+
+      if (sc.status === 'ACCEPTED' && sc.respondedAt) {
+        events.push({
+          id: `trail-sc-acc-${sc.id}`,
+          projectId,
+          eventType: 'SCOPE_CHANGE_ACCEPTED',
+          title: 'Scope Change Mutual Acceptance',
+          description: `Counterparty accepted proposed modifications. Terms updated to ₹${sc.proposedBudgetINR.toLocaleString('en-IN')} INR and deadline ${sc.proposedDeadline}.`,
+          timestamp: sc.respondedAt,
+          actorName: 'Counterparty',
+          actorRole: sc.requestedByRole === 'BUSINESS' ? 'STUDENT' : 'BUSINESS',
+          isVerified: true,
+          verificationNote: 'Scope Lock updated and financial records recalculated',
+        });
+      } else if (sc.status === 'REJECTED' && sc.respondedAt) {
+        events.push({
+          id: `trail-sc-rej-${sc.id}`,
+          projectId,
+          eventType: 'SCOPE_CHANGE_REJECTED',
+          title: 'Scope Change Proposal Declined',
+          description: `Original agreed terms preserved. Rejection rationale: "${sc.rejectionReason || 'Declined'}"`,
+          timestamp: sc.respondedAt,
+          actorName: 'Counterparty',
+          actorRole: sc.requestedByRole === 'BUSINESS' ? 'STUDENT' : 'BUSINESS',
+          isVerified: true,
+          verificationNote: 'Previous scope lock remains binding',
+        });
+      }
+    });
+
+    // 5. Deliverable Submissions
+    const subs = this.getSubmissions().filter((s) => s.projectId === projectId);
+    subs.forEach((sub) => {
+      events.push({
+        id: `trail-sub-${sub.id}`,
+        projectId,
+        eventType: 'DELIVERABLE_SUBMITTED',
+        title: `Deliverables Submitted (Version ${sub.version})`,
+        description: sub.notes + (sub.liveLink ? ` | Live link: ${sub.liveLink}` : ''),
+        timestamp: sub.submittedAt,
+        actorName: proj.selectedStudentName || 'Student Creator',
+        actorRole: 'STUDENT',
+        isVerified: false,
+        verificationNote: 'Private submission pending business review',
+      });
+
+      if (sub.revisionFeedback && sub.revisionRequestedAt) {
+        events.push({
+          id: `trail-rev-${sub.id}`,
+          projectId,
+          eventType: 'REVISION_REQUESTED',
+          title: `Revision Requested on Version ${sub.version}`,
+          description: `Feedback within agreed scope: "${sub.revisionFeedback}"`,
+          timestamp: sub.revisionRequestedAt,
+          actorName: proj.businessName,
+          actorRole: 'BUSINESS',
+          isVerified: true,
+          verificationNote: 'Counted against permitted revision limit',
+        });
+      }
+    });
+
+    // 6. Deliverable Approval / Project Completion
+    if (proj.status === 'COMPLETED') {
+      events.push({
+        id: `trail-comp-${proj.id}`,
+        projectId,
+        eventType: 'DELIVERABLES_APPROVED',
+        title: 'Deliverables Approved & Project Completed',
+        description: `Business confirmed all deliverables meet acceptance criteria. Creator is cleared for payout. (Note: Project Completion is separate from Payment Confirmation).`,
+        timestamp: proj.updatedAt,
+        actorName: proj.businessName,
+        actorRole: 'BUSINESS',
+        isVerified: true,
+        verificationNote: 'Deliverables sign-off confirmed by client',
+      });
+    }
+
+    // 7. Business-to-Creator Project Payment Lifecycle
+    const pay = this.getPayments().find((p) => p.projectId === projectId);
+    if (pay) {
+      if (pay.status === 'REPORTED_BY_BUSINESS' || pay.status === 'RECEIPT_CONFIRMED_BY_CREATOR' || pay.status === 'PAID') {
+        events.push({
+          id: `trail-pay-rep-${pay.id}`,
+          projectId,
+          eventType: 'PROJECT_PAYMENT_REPORTED',
+          title: 'Direct Project Payment Reported by Business',
+          description: `Business reported transfer of ₹${pay.amountINR.toLocaleString('en-IN')} INR via ${pay.paymentMethod}. Reference UTR: ${pay.transactionReferenceUTR || 'None'}. (Evidence under review, not verified receipt).`,
+          timestamp: pay.recordedAt || pay.createdAt,
+          actorName: proj.businessName,
+          actorRole: 'BUSINESS',
+          isVerified: false,
+          verificationNote: 'UTR submitted as evidence — NOT verified payment until confirmed by creator',
+        });
+      }
+
+      if (pay.status === 'RECEIPT_CONFIRMED_BY_CREATOR' || pay.status === 'PAID') {
+        events.push({
+          id: `trail-pay-conf-${pay.id}`,
+          projectId,
+          eventType: 'PROJECT_PAYMENT_CONFIRMED',
+          title: 'Payment Receipt Confirmed by Creator',
+          description: `Creator confirmed actual credit of ₹${pay.amountINR.toLocaleString('en-IN')} INR in their bank / UPI account.`,
+          timestamp: pay.confirmedAt || pay.recordedAt || pay.createdAt,
+          actorName: proj.selectedStudentName || 'Student Creator',
+          actorRole: 'STUDENT',
+          isVerified: true,
+          verificationNote: 'Confirmed settled payment by recipient',
+        });
+      } else if (pay.status === 'DISPUTED') {
+        events.push({
+          id: `trail-pay-disp-${pay.id}`,
+          projectId,
+          eventType: 'PROJECT_PAYMENT_DISPUTED',
+          title: 'Project Payment Receipt Disputed',
+          description: `Creator reported funds not credited despite business UTR submission. Reason: ${pay.disputeReason || 'Unreceived funds'}.`,
+          timestamp: pay.recordedAt || pay.createdAt,
+          actorName: proj.selectedStudentName || 'Student Creator',
+          actorRole: 'STUDENT',
+          isVerified: true,
+          verificationNote: 'Flagged for platform moderation audit',
+        });
+      }
+    }
+
+    // 8. Platform Commission Lifecycle
+    const comm = this.getPlatformCommissions().find((c) => c.projectId === projectId);
+    if (comm) {
+      if (comm.status !== 'NOT_DUE') {
+        events.push({
+          id: `trail-comm-due-${comm.id}`,
+          projectId,
+          eventType: 'PLATFORM_FEE_DUE',
+          title: 'Platform Commission Due from Business',
+          description: `Commission invoice of ₹${comm.platformFeeINR.toLocaleString('en-IN')} INR (${comm.commissionRatePercent}%) due by ${comm.dueDate}. Business pays Proof-to-Pay directly.`,
+          timestamp: comm.createdAt,
+          actorName: 'System',
+          actorRole: 'SYSTEM',
+          isVerified: true,
+          verificationNote: 'Calculated separately from creator compensation',
+        });
+      }
+
+      if (comm.status === 'REPORTED_PAID' || comm.status === 'VERIFIED_COLLECTED') {
+        events.push({
+          id: `trail-comm-rep-${comm.id}`,
+          projectId,
+          eventType: 'PLATFORM_FEE_REPORTED',
+          title: 'Platform Fee Payment Reported',
+          description: `Business reported fee transfer with UTR: ${comm.reportedUTR}. Pending admin reconciliation.`,
+          timestamp: comm.reportedAt || comm.updatedAt,
+          actorName: proj.businessName,
+          actorRole: 'BUSINESS',
+          isVerified: false,
+          verificationNote: 'Submitted reference under administrative bank review',
+        });
+      }
+
+      if (comm.status === 'VERIFIED_COLLECTED') {
+        events.push({
+          id: `trail-comm-ver-${comm.id}`,
+          projectId,
+          eventType: 'PLATFORM_FEE_VERIFIED',
+          title: 'Platform Commission Verified Collected (Admin)',
+          description: `Platform Administrator verified ₹${comm.platformFeeINR.toLocaleString('en-IN')} INR received in Proof-to-Pay bank account. Verified by: ${comm.verifiedByName}. Evidence: "${comm.evidenceReviewedNotes}".`,
+          timestamp: comm.verifiedAt || comm.updatedAt,
+          actorName: comm.verifiedByName || 'Platform Admin',
+          actorRole: 'ADMIN',
+          isVerified: true,
+          verificationNote: 'Bank statement reconciled & verified by authorized administrator',
+        });
+      }
+    }
+
+    // Sort all events chronologically (oldest to newest)
+    return events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }
 
   // --- User Administration ---

@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { User, BusinessProfile, ProjectListing, DisputeRecord, AuditLog, BetaFeedback, AbuseReport } from '../../types';
+import {
+  User,
+  BusinessProfile,
+  ProjectListing,
+  DisputeRecord,
+  AuditLog,
+  BetaFeedback,
+  AbuseReport,
+  PlatformFeeStatus
+} from '../../types';
 import { marketplaceStore } from '../../lib/storage';
 import {
   Shield,
@@ -18,7 +27,14 @@ import {
   Sparkles,
   MessageSquareHeart,
   ShieldAlert,
-  TrendingUp
+  TrendingUp,
+  Coins,
+  Receipt,
+  Percent,
+  SlidersHorizontal,
+  Check,
+  Ban,
+  ArrowRight
 } from 'lucide-react';
 
 interface Props {
@@ -27,7 +43,7 @@ interface Props {
 }
 
 export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'beta_ops' | 'verifications' | 'projects' | 'disputes' | 'users' | 'audit_logs' | 'tests'>('beta_ops');
+  const [activeTab, setActiveTab] = useState<'overview' | 'beta_ops' | 'monetization' | 'verifications' | 'projects' | 'disputes' | 'users' | 'audit_logs' | 'tests'>('monetization');
 
   const users = marketplaceStore.getUsers();
   const projects = marketplaceStore.getProjects();
@@ -36,6 +52,15 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate }) => 
   const betaReport = marketplaceStore.getBetaMetricsReport();
   const betaFeedbacks = marketplaceStore.getBetaFeedbacks();
   const abuseReports = marketplaceStore.getAbuseReports();
+  const monetizationMetrics = marketplaceStore.getMonetizationMetrics();
+  const monetizationConfig = marketplaceStore.getMonetizationConfig();
+  const commissions = marketplaceStore.getPlatformCommissions();
+
+  // Monetization filters state
+  const [commissionStatusFilter, setCommissionStatusFilter] = useState<PlatformFeeStatus | 'ALL'>('ALL');
+  const [commissionSearchQuery, setCommissionSearchQuery] = useState<string>('');
+  const [newCommissionRate, setNewCommissionRate] = useState<number>(monetizationConfig.defaultCommissionRatePercent);
+  const [configSuccessMsg, setConfigSuccessMsg] = useState<string | null>(null);
 
   // Businesses needing verification
   const businessProfiles = users
@@ -131,6 +156,68 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate }) => 
     }
   };
 
+  // Monetization Handlers
+  const handleVerifyCommission = (commissionId: string) => {
+    const notes = prompt(
+      'Enter bank/account evidence reviewed to verify fee collection:',
+      'Verified ₹ credit match in platform current account statement via HDFC NetBanking.'
+    );
+    if (notes && notes.trim().length >= 5) {
+      try {
+        marketplaceStore.adminVerifyPlatformCommission(currentUser, commissionId, notes);
+        window.location.reload();
+      } catch (err: any) {
+        alert(err.message);
+      }
+    }
+  };
+
+  const handleWaiveCommission = (commissionId: string) => {
+    const reason = prompt(
+      'Administrative justification for waiving platform fee:',
+      'Beta launch partnership incentive waiver approved by platform management.'
+    );
+    if (reason && reason.trim().length >= 5) {
+      try {
+        marketplaceStore.adminWaivePlatformCommission(currentUser, commissionId, reason);
+        window.location.reload();
+      } catch (err: any) {
+        alert(err.message);
+      }
+    }
+  };
+
+  const handleAdjustCommission = (commissionId: string, currentAmount: number) => {
+    const newAmountStr = prompt(`Enter adjusted fee amount in INR (currently ₹${currentAmount}):`, String(currentAmount));
+    if (newAmountStr !== null) {
+      const newAmount = Number(newAmountStr);
+      if (isNaN(newAmount) || newAmount < 0) {
+        alert('Invalid amount entered');
+        return;
+      }
+      const reason = prompt('Reason for platform commission adjustment:', 'Scope reduction adjustment mutually agreed.');
+      if (reason && reason.trim().length >= 4) {
+        try {
+          marketplaceStore.adminAdjustPlatformCommission(currentUser, commissionId, newAmount, reason);
+          window.location.reload();
+        } catch (err: any) {
+          alert(err.message);
+        }
+      }
+    }
+  };
+
+  const handleUpdateCommissionRate = (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      marketplaceStore.updateMonetizationConfig(currentUser, newCommissionRate);
+      setConfigSuccessMsg(`Platform commission rate updated to ${newCommissionRate}%! Applies strictly to future offers.`);
+      setTimeout(() => setConfigSuccessMsg(null), 4000);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
       {/* Header */}
@@ -174,6 +261,23 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate }) => 
           {betaReport.openAbuseReportsCount > 0 && (
             <span className="w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center font-bold">
               {betaReport.openAbuseReportsCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('monetization')}
+          className={`pb-3 px-2 border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === 'monetization'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Coins className="w-3.5 h-3.5 text-emerald-500" />
+          <span>Platform Monetization ({monetizationConfig.defaultCommissionRatePercent}%)</span>
+          {monetizationMetrics.commissionReportedPaidINR > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[9px] font-bold">
+              Awaiting Audit
             </span>
           )}
         </button>
@@ -251,6 +355,343 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate }) => 
           Automated Test Suite
         </button>
       </div>
+
+      {/* Tab: Platform Monetization & Commission (Phase 1 Beta) */}
+      {activeTab === 'monetization' && (
+        <div className="space-y-8">
+          {/* Monetization Header */}
+          <div className="bg-gradient-to-r from-emerald-900/40 via-teal-900/30 to-slate-900 rounded-3xl p-6 sm:p-8 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-xs border border-emerald-500/30">
+                  Phase 1 Beta Monetization
+                </span>
+                <span className="text-xs text-slate-400">Zero Payment Gateway Active</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white mt-1">
+                Platform Commission & Revenue Audit
+              </h2>
+              <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                Proof-to-Pay connects businesses and creators without holding or splitting creator project funds. The initial platform fee is {monetizationConfig.defaultCommissionRatePercent}% per project, paid separately by businesses directly to Proof-to-Pay.
+              </p>
+            </div>
+
+            <div className="text-left sm:text-right shrink-0">
+              <span className="text-xs text-slate-400">Fee Collection Rate</span>
+              <div className="text-3xl font-black text-emerald-400 font-mono">
+                {monetizationMetrics.feeCollectionRatePercent}%
+              </div>
+              <span className="text-[11px] text-slate-400">Verified vs Total Chargeable</span>
+            </div>
+          </div>
+
+          {/* 8 Financial & Operational Metric Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Completed Projects</span>
+              <div className="text-2xl font-black text-slate-900 dark:text-white">
+                {monetizationMetrics.completedProjectsCount}
+              </div>
+              <p className="text-[11px] text-slate-500">Delivered & verified projects</p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Total Agreed Project Value</span>
+              <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                ₹{monetizationMetrics.totalAgreedProjectValueINR.toLocaleString('en-IN')}
+              </div>
+              <p className="text-[11px] text-slate-500">Gross contract volume in INR</p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-emerald-500/[0.04] dark:bg-emerald-950/20 border border-emerald-300 dark:border-emerald-800 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-emerald-700 dark:text-emerald-300 font-bold uppercase tracking-wider">Verified Collected</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              </div>
+              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                ₹{monetizationMetrics.commissionVerifiedCollectedINR.toLocaleString('en-IN')}
+              </div>
+              <p className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80">Real revenue confirmed in bank</p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-amber-500/[0.04] dark:bg-amber-950/20 border border-amber-300 dark:border-amber-800 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-amber-700 dark:text-amber-300 font-bold uppercase tracking-wider">Reported (Unverified)</span>
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              </div>
+              <div className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
+                ₹{monetizationMetrics.commissionReportedPaidINR.toLocaleString('en-IN')}
+              </div>
+              <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80">UTR reported, pending bank audit</p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Commission Due</span>
+              <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 font-mono">
+                ₹{monetizationMetrics.commissionDueINR.toLocaleString('en-IN')}
+              </div>
+              <p className="text-[11px] text-slate-500">Payable by completed projects</p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Overdue Fees</span>
+              <div className="text-2xl font-black text-rose-600 dark:text-rose-400 font-mono">
+                ₹{monetizationMetrics.overdueFeesINR.toLocaleString('en-IN')}
+              </div>
+              <p className="text-[11px] text-slate-500">Exceeded 5-day grace window</p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Waived / Adjusted</span>
+              <div className="text-2xl font-black text-slate-600 dark:text-slate-300 font-mono">
+                ₹{monetizationMetrics.waivedFeesINR.toLocaleString('en-IN')}
+              </div>
+              <p className="text-[11px] text-slate-500">Documented pilot incentives</p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Current Default Fee</span>
+              <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                {monetizationConfig.defaultCommissionRatePercent}%
+              </div>
+              <p className="text-[11px] text-slate-500">Initial business-paid platform rate</p>
+            </div>
+          </div>
+
+          {/* Admin Commission Rate Configuration Card */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-emerald-600" />
+                  <span>Platform Commission Rate Configuration</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Authorized administrator settings. Changes apply strictly to newly created offers. Existing accepted projects remain immutable.
+                </p>
+              </div>
+
+              <form onSubmit={handleUpdateCommissionRate} className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <Percent className="w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="number"
+                    min="0"
+                    max="50"
+                    step="0.5"
+                    value={newCommissionRate}
+                    onChange={(e) => setNewCommissionRate(Number(e.target.value))}
+                    className="w-16 bg-transparent text-sm font-bold text-slate-900 dark:text-white outline-none font-mono"
+                    required
+                  />
+                  <span className="text-xs text-slate-400 font-bold">%</span>
+                </div>
+
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-semibold text-xs transition"
+                >
+                  Save New Rate
+                </button>
+              </form>
+            </div>
+
+            {configSuccessMsg && (
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2">
+                <Check className="w-4 h-4" />
+                <span>{configSuccessMsg}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Commission Invoices & Audit Ledger */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Receipt className="w-4 h-4 text-indigo-600" />
+                  <span>Platform Fee Ledger & Audit Records ({commissions.length})</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Review fee payments, verify bank credit evidence, or record authorized waivers.
+                </p>
+              </div>
+
+              {/* Search & Status Filter */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={commissionSearchQuery}
+                    onChange={(e) => setCommissionSearchQuery(e.target.value)}
+                    placeholder="Search by business or project..."
+                    className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 w-52"
+                  />
+                </div>
+
+                <select
+                  value={commissionStatusFilter}
+                  onChange={(e) => setCommissionStatusFilter(e.target.value as any)}
+                  className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-medium"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="REPORTED_PAID">Reported Paid (Needs Audit)</option>
+                  <option value="DUE">Due for Collection</option>
+                  <option value="VERIFIED_COLLECTED">Verified Collected</option>
+                  <option value="NOT_DUE">Not Due Yet</option>
+                  <option value="OVERDUE">Overdue</option>
+                  <option value="WAIVED">Waived</option>
+                  <option value="REFUNDED_OR_ADJUSTED">Adjusted</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Filtered Ledger Table */}
+            {(() => {
+              const filteredCommissions = commissions.filter((c) => {
+                if (commissionStatusFilter !== 'ALL' && c.status !== commissionStatusFilter) return false;
+                if (commissionSearchQuery.trim()) {
+                  const q = commissionSearchQuery.toLowerCase();
+                  return (
+                    c.projectTitle.toLowerCase().includes(q) ||
+                    c.businessName.toLowerCase().includes(q) ||
+                    (c.reportedUTR && c.reportedUTR.toLowerCase().includes(q))
+                  );
+                }
+                return true;
+              });
+
+              if (filteredCommissions.length === 0) {
+                return (
+                  <div className="p-12 text-center text-xs text-slate-400 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                    No platform commission records matching the selected filter criteria.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-400 font-semibold">
+                        <th className="pb-3 pr-4">Project & Business</th>
+                        <th className="pb-3 px-4">Agreed Value</th>
+                        <th className="pb-3 px-4">Fee (5%)</th>
+                        <th className="pb-3 px-4">Status</th>
+                        <th className="pb-3 px-4">Due Date</th>
+                        <th className="pb-3 px-4">Evidence / UTR</th>
+                        <th className="pb-3 pl-4 text-right">Administrative Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                      {filteredCommissions.map((comm) => (
+                        <tr key={comm.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition">
+                          <td className="py-4 pr-4">
+                            <strong className="text-slate-900 dark:text-white block font-bold">
+                              {comm.projectTitle}
+                            </strong>
+                            <span className="text-[11px] text-slate-500">
+                              By {comm.businessName} · Creator: {comm.studentName}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-4 font-mono font-bold text-slate-800 dark:text-slate-200">
+                            ₹{comm.projectBudgetINR.toLocaleString('en-IN')}
+                          </td>
+
+                          <td className="py-4 px-4 font-mono font-black text-emerald-600 dark:text-emerald-400">
+                            ₹{comm.platformFeeINR.toLocaleString('en-IN')}
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase whitespace-nowrap ${
+                                comm.status === 'VERIFIED_COLLECTED'
+                                  ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300'
+                                  : comm.status === 'REPORTED_PAID'
+                                  ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 animate-pulse'
+                                  : comm.status === 'DUE'
+                                  ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300'
+                                  : comm.status === 'OVERDUE'
+                                  ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300'
+                                  : comm.status === 'WAIVED'
+                                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                              }`}
+                            >
+                              {comm.status.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-4 text-slate-500 font-mono text-[11px]">
+                            {comm.dueDate || 'N/A'}
+                          </td>
+
+                          <td className="py-4 px-4">
+                            {comm.reportedUTR ? (
+                              <div>
+                                <span className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                  {comm.reportedUTR}
+                                </span>
+                                {comm.evidenceReviewedNotes && (
+                                  <span className="block text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 line-clamp-1">
+                                    Audited: {comm.evidenceReviewedNotes}
+                                  </span>
+                                )}
+                              </div>
+                            ) : comm.waiverReason ? (
+                              <span className="text-[11px] text-slate-400 italic">
+                                Waived: {comm.waiverReason}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">
+                                Awaiting business UTR
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-4 pl-4 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {comm.status !== 'VERIFIED_COLLECTED' && (
+                                <button
+                                  onClick={() => handleVerifyCommission(comm.id)}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] transition"
+                                  title="Audit bank evidence and record verified collected"
+                                >
+                                  Verify Collection
+                                </button>
+                              )}
+
+                              {comm.status !== 'WAIVED' && comm.status !== 'VERIFIED_COLLECTED' && (
+                                <button
+                                  onClick={() => handleWaiveCommission(comm.id)}
+                                  className="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium text-[11px] transition"
+                                  title="Waive platform fee with administrative justification"
+                                >
+                                  Waive
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleAdjustCommission(comm.id, comm.platformFeeINR)}
+                                className="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium text-[11px] transition"
+                                title="Adjust commission amount with justification"
+                              >
+                                Adjust
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* Tab 0: Beta Launch Ops & Metrics */}
       {activeTab === 'beta_ops' && (

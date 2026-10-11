@@ -20,6 +20,7 @@ import { BusinessDashboard } from './components/pages/BusinessDashboard';
 import { AdminDashboard } from './components/pages/AdminDashboard';
 import { PublicPortfolio } from './components/pages/PublicPortfolio';
 import { HowItWorks } from './components/pages/HowItWorks';
+import { PilotChecklist } from './components/pages/PilotChecklist';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(marketplaceStore.getCurrentUser());
@@ -165,6 +166,15 @@ export default function App() {
             onNavigate={handleNavigate}
           />
         );
+      case 'pilot_checklist':
+        return (
+          <PilotChecklist
+            currentUser={currentUser}
+            onNavigate={handleNavigate}
+            onOpenAuth={handleOpenAuth}
+            onOpenFeedback={() => setIsFeedbackOpen(true)}
+          />
+        );
       case 'how_it_works':
       case 'about':
       case 'terms':
@@ -200,7 +210,10 @@ export default function App() {
       />
 
       {/* Beta Launch Community Banner */}
-      <BetaBanner onOpenFeedback={() => setIsFeedbackOpen(true)} />
+      <BetaBanner
+        onOpenFeedback={() => setIsFeedbackOpen(true)}
+        onNavigate={handleNavigate}
+      />
 
       {/* Offline Mode Indicator */}
       <OfflineIndicator />

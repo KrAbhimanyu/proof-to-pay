@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, StudentProfile, Application, ProjectListing, ProjectSubmission, ProjectOffer, PaymentRecord, VerifiedReview } from '../../types';
 import { marketplaceStore } from '../../lib/storage';
 import { WorkSubmissionSchema } from '../../lib/schemas';
+import { Badges } from '../common/Badges';
 import confetti from 'canvas-confetti';
 import {
   GraduationCap,
@@ -20,7 +21,10 @@ import {
   Copy,
   ChevronRight,
   TrendingUp,
-  Wallet
+  Wallet,
+  Award,
+  Sparkles,
+  Check
 } from 'lucide-react';
 
 interface Props {
@@ -29,7 +33,7 @@ interface Props {
 }
 
 export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'applications' | 'active_projects' | 'payments' | 'portfolio' | 'profile' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'applications' | 'active_projects' | 'payments' | 'badges' | 'portfolio' | 'profile' | 'settings'>('overview');
 
   const profile = marketplaceStore.getStudentProfile(currentUser.id) || {
     userId: currentUser.id,
@@ -77,6 +81,35 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
       setActiveTab('active_projects');
     } catch (err: any) {
       alert(err.message);
+    }
+  };
+
+  // Handle Payment Receipt Confirmation
+  const handleConfirmPaymentReceipt = (projectId: string) => {
+    if (window.confirm('Confirm that you have received the full agreed project amount in your bank account / UPI?')) {
+      try {
+        marketplaceStore.confirmProjectPaymentReceipt(currentUser, projectId);
+        confetti({ particleCount: 60, spread: 50 });
+        alert('Payment receipt confirmed! This verified settlement is permanently logged.');
+        window.location.reload();
+      } catch (err: any) {
+        alert(err.message);
+      }
+    }
+  };
+
+  // Handle Payment Dispute
+  const handleDisputePayment = (projectId: string) => {
+    const reason = prompt('Please explain the issue with this payout record (e.g. UTR is invalid, funds not received):');
+    if (reason && reason.trim().length >= 4) {
+      try {
+        marketplaceStore.disputeProjectPayment(currentUser, projectId, reason);
+        marketplaceStore.fileDispute(currentUser, projectId, 'Payout dispute: ' + reason, 'Student reported payment discrepancy with business UTR.');
+        alert('Payment dispute filed. An administrator will investigate with the business.');
+        window.location.reload();
+      } catch (err: any) {
+        alert(err.message);
+      }
     }
   };
 
@@ -166,6 +199,20 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
               <span>·</span>
               <span>{profile.college || 'University Student'}</span>
             </div>
+
+            {/* Earned Milestones Strip */}
+            <div className="mt-3">
+              <Badges
+                profile={profile}
+                user={currentUser}
+                reviews={reviews}
+                submissions={submissions}
+                projects={activeProjects}
+                payments={payments}
+                variant="strip"
+                isOwner={true}
+              />
+            </div>
           </div>
         </div>
 
@@ -250,6 +297,18 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
         </button>
 
         <button
+          onClick={() => setActiveTab('badges')}
+          className={`pb-3 px-2 border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === 'badges'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
+          }`}
+        >
+          <Award className="w-3.5 h-3.5 text-amber-500" />
+          <span>Milestones & Badges</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('portfolio')}
           className={`pb-3 px-2 border-b-2 transition whitespace-nowrap ${
             activeTab === 'portfolio'
@@ -301,6 +360,14 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
                 <p className="text-xs text-slate-600 dark:text-slate-400">
                   Offered by <strong>{offer.businessName}</strong> · Fixed Budget: <strong>₹{offer.agreedBudgetINR.toLocaleString('en-IN')} INR</strong> · Deadline: <strong>{offer.agreedDeadline}</strong>
                 </p>
+                <div className="pt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className="px-2 py-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-semibold">
+                    ✓ 100% Net Creator Payout: ₹{offer.agreedBudgetINR.toLocaleString('en-IN')} INR
+                  </span>
+                  <span className="text-slate-500">
+                    Platform commission (5%) paid separately by business to Proof-to-Pay. ₹0 deducted from you.
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button
@@ -379,6 +446,47 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Gamified Milestones & Proof Level Showcase Card */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-7 rounded-3xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-md">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Proof Reputation
+                </span>
+                <span className="text-xs text-slate-400">· Gamified Work Milestones</span>
+              </div>
+              <h3 className="text-lg font-black text-white flex items-center gap-2">
+                <span>Milestone Proof Badges</span>
+                <Sparkles className="w-4 h-4 text-amber-400" />
+              </h3>
+              <p className="text-xs text-slate-300 max-w-xl">
+                Earn verified credentials like Early Adopter, Top Rated, and Project Completed as you deliver real work for Indian businesses.
+              </p>
+              <div className="pt-2">
+                <Badges
+                  profile={profile}
+                  user={currentUser}
+                  reviews={reviews}
+                  submissions={submissions}
+                  projects={activeProjects}
+                  payments={payments}
+                  variant="strip"
+                  isOwner={true}
+                />
+              </div>
+            </div>
+
+            <div className="shrink-0 flex sm:flex-col items-center sm:items-end justify-between gap-3">
+              <button
+                onClick={() => setActiveTab('badges')}
+                className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs transition shadow-md flex items-center gap-2"
+              >
+                <Award className="w-4 h-4" />
+                <span>Explore Badges & XP</span>
+              </button>
             </div>
           </div>
         </div>
@@ -653,35 +761,98 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
             </div>
           </div>
 
-          <div className="space-y-4">
-            {payments.map((pay) => (
-              <div key={pay.id} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-base text-slate-900 dark:text-white">{pay.projectTitle}</span>
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    Method: {pay.paymentMethod} {pay.transactionReferenceUTR && `· UTR: ${pay.transactionReferenceUTR}`}
-                  </div>
-                  {pay.notes && <p className="text-xs text-slate-400 italic">{pay.notes}</p>}
-                </div>
+          <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-800/40 text-xs text-emerald-900 dark:text-emerald-300 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>
+              <strong>Zero Deductions Guarantee:</strong> You receive 100% of agreed micro-project budgets. Proof-to-Pay charges businesses separately for platform commissions—no fee is deducted from your earnings.
+            </span>
+          </div>
 
-                <div className="text-right shrink-0">
-                  <div className="font-extrabold text-base text-slate-900 dark:text-white">
-                    ₹{pay.amountINR.toLocaleString('en-IN')} INR
+          <div className="space-y-4">
+            {payments.map((pay) => {
+              const canConfirm = pay.status === 'REPORTED_BY_BUSINESS' || (pay.status === 'PAID' && !pay.confirmedAt);
+              const isConfirmed = pay.status === 'RECEIPT_CONFIRMED_BY_CREATOR' || !!pay.confirmedAt;
+              const isDisputed = pay.status === 'DISPUTED';
+
+              return (
+                <div key={pay.id} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-base text-slate-900 dark:text-white">{pay.projectTitle}</span>
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Method: {pay.paymentMethod} {pay.transactionReferenceUTR && `· UTR: ${pay.transactionReferenceUTR}`}
+                    </div>
+                    {pay.notes && <p className="text-xs text-slate-400 italic">{pay.notes}</p>}
+                    {isConfirmed && pay.confirmedAt && (
+                      <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" />
+                        <span>You confirmed receipt on {new Date(pay.confirmedAt).toLocaleDateString()}</span>
+                      </p>
+                    )}
+                    {isDisputed && (
+                      <p className="text-[11px] text-rose-600 font-semibold">
+                        Dispute filed with platform administration.
+                      </p>
+                    )}
                   </div>
-                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full inline-block mt-1 ${
-                    pay.status === 'PAID' ? 'bg-emerald-100 text-emerald-800' :
-                    pay.status === 'PENDING_CONFIRMATION' ? 'bg-amber-100 text-amber-800' :
-                    'bg-slate-100 text-slate-700'
-                  }`}>
-                    {pay.status.replace('_', ' ')}
-                  </span>
+
+                  <div className="flex flex-col sm:items-end gap-2 shrink-0">
+                    <div className="font-extrabold text-base text-slate-900 dark:text-white">
+                      ₹{pay.amountINR.toLocaleString('en-IN')} INR
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full inline-block ${
+                      isConfirmed
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                        : isDisputed
+                        ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                        : pay.status === 'REPORTED_BY_BUSINESS' || pay.status === 'PAID'
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                    }`}>
+                      {pay.status.replace(/_/g, ' ')}
+                    </span>
+
+                    {/* Creator Actions when business reported payment */}
+                    {canConfirm && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          onClick={() => handleConfirmPaymentReceipt(pay.projectId)}
+                          className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] transition shadow-sm"
+                        >
+                          Confirm Receipt
+                        </button>
+                        <button
+                          onClick={() => handleDisputePayment(pay.projectId)}
+                          className="px-2.5 py-1 rounded-xl border border-rose-300 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-[11px] font-medium transition"
+                        >
+                          Dispute
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
+      )}
+
+      {/* Tab: Milestones & Badges */}
+      {activeTab === 'badges' && (
+        <Badges
+          profile={profile}
+          user={currentUser}
+          reviews={reviews}
+          submissions={submissions}
+          projects={activeProjects}
+          payments={payments}
+          variant="full"
+          isOwner={true}
+          onUpdatePinnedBadges={(newPinned) => {
+            marketplaceStore.updateStudentProfile(currentUser.id, { pinnedBadgeIds: newPinned });
+          }}
+        />
       )}
 
       {/* Tab 5: Verified Portfolio */}
