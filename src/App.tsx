@@ -162,8 +162,10 @@ export default function App() {
         return (
           <PublicPortfolio
             slug={viewParam || 'aarav-sharma'}
+            currentUser={currentUser}
             onBack={() => handleNavigate('browse')}
             onNavigate={handleNavigate}
+            onOpenAuth={handleOpenAuth}
           />
         );
       case 'pilot_checklist':

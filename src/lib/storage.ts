@@ -67,11 +67,19 @@ const STORAGE_KEYS = {
 };
 
 class MarketplaceStore {
+  private memoryStore: Record<string, string> = {};
+
   private get<T>(key: string, fallback: T): T {
     try {
-      const data = localStorage.getItem(key);
-      if (!data) return fallback;
-      return JSON.parse(data) as T;
+      if (typeof localStorage !== 'undefined') {
+        const data = localStorage.getItem(key);
+        if (!data) return fallback;
+        return JSON.parse(data) as T;
+      } else {
+        const data = this.memoryStore[key];
+        if (!data) return fallback;
+        return JSON.parse(data) as T;
+      }
     } catch {
       return fallback;
     }
@@ -79,15 +87,35 @@ class MarketplaceStore {
 
   private set<T>(key: string, value: T): void {
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      const json = JSON.stringify(value);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(key, json);
+      }
+      this.memoryStore[key] = json;
     } catch {
       // localStorage may fail in edge cases
     }
   }
 
+  public isDemoMode(): boolean {
+    // Demo mode is active when live Supabase credentials are not connected
+    const config = this.get<{ isDemoOverride?: boolean }>('ptp_mode_override', { isDemoOverride: true });
+    return config.isDemoOverride ?? true;
+  }
+
+  public setDemoMode(isDemo: boolean): void {
+    this.set('ptp_mode_override', { isDemoOverride: isDemo });
+  }
+
   public init(): void {
-    if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
-      this.resetToDefaults();
+    if (typeof localStorage !== 'undefined') {
+      if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
+        this.resetToDefaults();
+      }
+    } else {
+      if (!this.memoryStore[STORAGE_KEYS.USERS]) {
+        this.resetToDefaults();
+      }
     }
   }
 
@@ -168,13 +196,37 @@ class MarketplaceStore {
       portfolioLinks: [],
       totalEarnedINR: 0,
       completedProjectsCount: 0,
-      averageRating: 5.0,
+      averageRating: 0,
       verifiedPortfolioSlug: userId,
     };
     const updated = { ...current, ...data };
     profiles[userId] = updated;
     this.set(STORAGE_KEYS.STUDENT_PROFILES, profiles);
     return updated;
+  }
+
+  public updateCreatorPortfolio(user: User, profileUserId: string, data: Partial<StudentProfile>): StudentProfile {
+    if (user.id !== profileUserId && user.role !== 'ADMIN') {
+      throw new Error('Unauthorized to edit this creator profile');
+    }
+    // Whitelist only editable portfolio presentation fields to prevent privilege escalation
+    const sanitized: Partial<StudentProfile> = {};
+    if (data.headline !== undefined) sanitized.headline = data.headline.trim();
+    if (data.bio !== undefined) sanitized.bio = data.bio.trim();
+    if (data.college !== undefined) sanitized.college = data.college.trim();
+    if (data.degree !== undefined) sanitized.degree = data.degree.trim();
+    if (data.graduationYear !== undefined) sanitized.graduationYear = data.graduationYear;
+    if (data.skills !== undefined) sanitized.skills = data.skills;
+    if (data.experienceLevel !== undefined) sanitized.experienceLevel = data.experienceLevel;
+    if (data.portfolioLinks !== undefined) sanitized.portfolioLinks = data.portfolioLinks;
+    if (data.pinnedBadgeIds !== undefined) sanitized.pinnedBadgeIds = data.pinnedBadgeIds;
+    if (data.coverImageUrl !== undefined) sanitized.coverImageUrl = data.coverImageUrl;
+    if (data.availability !== undefined) sanitized.availability = data.availability;
+    if (data.socialLinks !== undefined) sanitized.socialLinks = data.socialLinks;
+
+    const result = this.updateStudentProfile(profileUserId, sanitized);
+    this.logAudit(user, 'UPDATED_PORTFOLIO_PRESENTATION', 'USER', profileUserId, 'Updated public creator profile fields and presentation.');
+    return result;
   }
 
   // --- Business Profiles ---
@@ -707,24 +759,18 @@ class MarketplaceStore {
 
     this.set(STORAGE_KEYS.PAYMENTS, payments);
 
-    // Update student earnings & count upon payment reporting
-    if (proj.selectedStudentId) {
-      const studentProfile = this.getStudentProfile(proj.selectedStudentId);
-      if (studentProfile) {
-        studentProfile.totalEarnedINR += proj.budgetINR;
-        studentProfile.completedProjectsCount += 1;
-        this.updateStudentProfile(proj.selectedStudentId, studentProfile);
-      }
-    }
-
     this.logAudit(
       businessUser,
       'REPORTED_CREATOR_PAYMENT_UTR',
       'PAYMENT',
       pay.id,
-      `Reported ₹${proj.budgetINR} INR creator payment via ${paymentMethod} (UTR: ${utrReference})`
+      `Reported ₹${proj.budgetINR} INR creator payment via ${paymentMethod} (UTR: ${utrReference}). Awaiting creator receipt confirmation.`
     );
     return pay;
+  }
+
+  public creatorConfirmPaymentReceipt(studentUser: User, projectId: string): PaymentRecord {
+    return this.confirmProjectPaymentReceipt(studentUser, projectId);
   }
 
   public confirmProjectPaymentReceipt(studentUser: User, projectId: string): PaymentRecord {
@@ -737,6 +783,17 @@ class MarketplaceStore {
     pay.confirmedAt = new Date().toISOString();
     pay.confirmedByUserId = studentUser.id;
     this.set(STORAGE_KEYS.PAYMENTS, payments);
+
+    // Update student earnings & completed count ONLY upon actual confirmed receipt
+    const proj = this.getProject(projectId);
+    if (proj && proj.selectedStudentId) {
+      const studentProfile = this.getStudentProfile(proj.selectedStudentId);
+      if (studentProfile) {
+        studentProfile.totalEarnedINR += pay.amountINR;
+        studentProfile.completedProjectsCount += 1;
+        this.updateStudentProfile(proj.selectedStudentId, studentProfile);
+      }
+    }
 
     this.logAudit(
       studentUser,
@@ -1117,12 +1174,15 @@ class MarketplaceStore {
       businessName: project.businessName,
       businessCity: project.businessCity,
       sanitizedSummary: `Delivered verified outcomes: ${sanitizedSummary}`,
-      rating: rating || 5,
-      reviewSnippet: reviewSnippet || 'Project successfully completed and accepted per agreed specifications.',
+      rating: rating !== undefined ? rating : undefined,
+      reviewSnippet: reviewSnippet || undefined,
       isPublic: true,
       displayOrder: items.length + 1,
       badgeTitle: source === 'DISPUTE_RESOLUTION' ? 'Dispute Confirmed Outcome' : 'Verified Work Delivery',
       createdAt: new Date().toISOString(),
+      skills: project.requiredSkills,
+      deliverables: project.deliverables.map((d) => d.title),
+      coverImage: project.coverImage,
     };
 
     this.set(STORAGE_KEYS.PROOF_PASSPORT_ITEMS, [newItem, ...items]);
@@ -1174,7 +1234,7 @@ class MarketplaceStore {
       offerId: offer.id,
       requestedByUserId: user.id,
       requestedByName: user.name,
-      requestedByRole: user.role,
+      requestedByRole: user.role as 'BUSINESS' | 'STUDENT',
       reason: data.reason.trim(),
       proposedBudgetINR: data.proposedBudgetINR,
       proposedDeadline: data.proposedDeadline,
@@ -1482,7 +1542,7 @@ class MarketplaceStore {
           eventType: 'PROJECT_PAYMENT_REPORTED',
           title: 'Direct Project Payment Reported by Business',
           description: `Business reported transfer of ₹${pay.amountINR.toLocaleString('en-IN')} INR via ${pay.paymentMethod}. Reference UTR: ${pay.transactionReferenceUTR || 'None'}. (Evidence under review, not verified receipt).`,
-          timestamp: pay.recordedAt || pay.createdAt,
+          timestamp: pay.recordedAt || pay.createdAt || proj.updatedAt,
           actorName: proj.businessName,
           actorRole: 'BUSINESS',
           isVerified: false,
@@ -1497,7 +1557,7 @@ class MarketplaceStore {
           eventType: 'PROJECT_PAYMENT_CONFIRMED',
           title: 'Payment Receipt Confirmed by Creator',
           description: `Creator confirmed actual credit of ₹${pay.amountINR.toLocaleString('en-IN')} INR in their bank / UPI account.`,
-          timestamp: pay.confirmedAt || pay.recordedAt || pay.createdAt,
+          timestamp: pay.confirmedAt || pay.recordedAt || pay.createdAt || proj.updatedAt,
           actorName: proj.selectedStudentName || 'Student Creator',
           actorRole: 'STUDENT',
           isVerified: true,
@@ -1510,7 +1570,7 @@ class MarketplaceStore {
           eventType: 'PROJECT_PAYMENT_DISPUTED',
           title: 'Project Payment Receipt Disputed',
           description: `Creator reported funds not credited despite business UTR submission. Reason: ${pay.disputeReason || 'Unreceived funds'}.`,
-          timestamp: pay.recordedAt || pay.createdAt,
+          timestamp: pay.recordedAt || pay.createdAt || proj.updatedAt,
           actorName: proj.selectedStudentName || 'Student Creator',
           actorRole: 'STUDENT',
           isVerified: true,

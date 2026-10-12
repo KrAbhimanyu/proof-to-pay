@@ -8,11 +8,15 @@ import {
   ProjectSubmission,
   PaymentRecord,
   VerifiedReview,
-  PlatformCommissionRecord
+  PlatformCommissionRecord,
+  ScopeChangeRequest
 } from '../../types';
 import { marketplaceStore } from '../../lib/storage';
 import { BusinessVerificationSchema, ProjectListingSchema, ProjectOfferSchema, RevisionRequestSchema, RecordPaymentSchema, ReviewSubmissionSchema } from '../../lib/schemas';
 import { Badges } from '../common/Badges';
+import { ScopeLockModal } from '../common/ScopeLockModal';
+import { ScopeChangeModal } from '../common/ScopeChangeModal';
+import { WorkTrail } from '../common/WorkTrail';
 import confetti from 'canvas-confetti';
 import {
   Building2,
@@ -34,7 +38,9 @@ import {
   Coins,
   Receipt,
   Info,
-  Sparkles
+  Sparkles,
+  Lock,
+  X
 } from 'lucide-react';
 
 interface Props {
@@ -119,6 +125,12 @@ export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate }) 
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewDeliverableSummary, setReviewDeliverableSummary] = useState('');
+
+  // --- Scope Lock & Work Trail Modal States ---
+  const [activeScopeLockProject, setActiveScopeLockProject] = useState<ProjectListing | null>(null);
+  const [activeWorkTrailProjectId, setActiveWorkTrailProjectId] = useState<string | null>(null);
+  const [activeScopeChangeProject, setActiveScopeChangeProject] = useState<ProjectListing | null>(null);
+  const [reviewingScopeChange, setReviewingScopeChange] = useState<{ project: ProjectListing; request: ScopeChangeRequest } | null>(null);
 
   // --- Verification Form State ---
   const [legalName, setLegalName] = useState(profile.verificationDetails?.legalEntityName || '');
@@ -229,6 +241,7 @@ export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate }) 
     }
 
     try {
+      const targetProj = businessProjects.find((p) => p.id === offeringApp.projectId);
       marketplaceStore.issueOffer(
         currentUser,
         offeringApp.projectId,
@@ -236,10 +249,12 @@ export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate }) 
         offerBudget,
         offerDeadline,
         offerRevisions,
-        offerScope
+        offerScope,
+        'Mutual cancellation permits pro-rata payment based on approved milestone deliverables. Unilateral cancellation without cause forfeits platform protections.',
+        targetProj?.deliverables
       );
       setOfferingApp(null);
-      alert('Formal offer extended to student! Once the student accepts, the project terms become locked.');
+      alert('Formal offer extended with locked deliverable terms! Awaiting student explicit acceptance.');
     } catch (err: any) {
       setOfferError(err.message);
     }
@@ -840,6 +855,74 @@ export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate }) 
                       {proj.status.replace('_', ' ')}
                     </span>
                   </div>
+
+                  {/* Scope Lock & Work Trail Action Bar */}
+                  <div className="flex flex-wrap items-center gap-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                    <button
+                      onClick={() => setActiveScopeLockProject(proj)}
+                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:border-emerald-500 transition flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Scope Lock Contract</span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveWorkTrailProjectId(proj.id)}
+                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:border-indigo-500 transition flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Work Trail Timeline</span>
+                    </button>
+
+                    {(proj.status === 'IN_PROGRESS' || proj.status === 'REVISION_REQUESTED') && (
+                      <button
+                        onClick={() => setActiveScopeChangeProject(proj)}
+                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:border-indigo-500 transition flex items-center gap-1.5 shadow-2xs"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Propose Scope Change</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Pending Scope Change Alert (from Student) */}
+                  {(() => {
+                    const pendingSC = marketplaceStore.getScopeChangeRequests(proj.id).find((r) => r.status === 'PENDING');
+                    if (!pendingSC) return null;
+                    return (
+                      <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border-2 border-indigo-200 dark:border-indigo-800/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                            <RotateCcw className="w-4 h-4 text-indigo-600" />
+                            <span>
+                              {pendingSC.requestedByUserId === currentUser.id
+                                ? 'Your Scope Change Proposal is Awaiting Creator Decision'
+                                : 'Incoming Scope Change Proposal from Creator'}
+                            </span>
+                          </div>
+                          <p className="text-indigo-800 dark:text-indigo-300">
+                            Proposed: Budget ₹{pendingSC.proposedBudgetINR.toLocaleString('en-IN')} INR · Deadline {pendingSC.proposedDeadline}
+                          </p>
+                          <p className="text-[11px] text-slate-500 italic">
+                            "{pendingSC.reason}"
+                          </p>
+                        </div>
+
+                        {pendingSC.requestedByUserId !== currentUser.id ? (
+                          <button
+                            onClick={() => setReviewingScopeChange({ project: proj, request: pendingSC })}
+                            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition shrink-0 shadow-xs"
+                          >
+                            Review & Respond
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-indigo-200">
+                            Awaiting Creator
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Submission Evaluation */}
                   {latestSub ? (
@@ -1537,6 +1620,60 @@ export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate }) 
             </div>
           </form>
         </div>
+      )}
+
+      {/* Scope Lock Modal */}
+      {activeScopeLockProject && (
+        <ScopeLockModal
+          project={activeScopeLockProject}
+          currentUser={currentUser}
+          onClose={() => setActiveScopeLockProject(null)}
+          onRequestScopeChange={() => {
+            const p = activeScopeLockProject;
+            setActiveScopeLockProject(null);
+            setActiveScopeChangeProject(p);
+          }}
+        />
+      )}
+
+      {/* Work Trail Timeline Modal */}
+      {activeWorkTrailProjectId && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-8 my-8 max-h-[85vh] overflow-y-auto">
+            <WorkTrail
+              projectId={activeWorkTrailProjectId}
+              currentUser={currentUser}
+              onClose={() => setActiveWorkTrailProjectId(null)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Propose Scope Change Modal */}
+      {activeScopeChangeProject && (
+        <ScopeChangeModal
+          project={activeScopeChangeProject}
+          currentUser={currentUser}
+          onClose={() => setActiveScopeChangeProject(null)}
+          onSuccess={() => {
+            setActiveScopeChangeProject(null);
+            window.location.reload();
+          }}
+        />
+      )}
+
+      {/* Review Incoming Scope Change Request */}
+      {reviewingScopeChange && (
+        <ScopeChangeModal
+          project={reviewingScopeChange.project}
+          currentUser={currentUser}
+          pendingRequest={reviewingScopeChange.request}
+          onClose={() => setReviewingScopeChange(null)}
+          onSuccess={() => {
+            setReviewingScopeChange(null);
+            window.location.reload();
+          }}
+        />
       )}
     </div>
   );

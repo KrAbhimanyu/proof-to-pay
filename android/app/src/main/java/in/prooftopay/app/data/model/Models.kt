@@ -137,6 +137,11 @@ data class ProjectOffer(
     @SerialName("creator_receives_inr") val creatorReceivesInr: Double = 0.0,
     @SerialName("fee_payer") val feePayer: String = "BUSINESS",
     @SerialName("commission_terms_snapshot") val commissionTermsSnapshot: String? = null,
+    @SerialName("cancellation_terms") val cancellationTerms: String? = null,
+    @SerialName("deliverables_snapshot") val deliverablesSnapshot: List<DeliverableItem> = emptyList(),
+    @SerialName("scope_locked") val scopeLocked: Boolean = false,
+    @SerialName("locked_at") val lockedAt: String? = null,
+    @SerialName("explicit_accepted_at") val explicitAcceptedAt: String? = null,
     @SerialName("created_at") val createdAt: String? = null
 )
 
@@ -266,4 +271,60 @@ data class AuditLog(
     val details: String,
     val timestamp: String
 )
+
+@Serializable
+data class ProofPassportItem(
+    val id: String,
+    @SerialName("student_id") val studentId: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("project_title") val projectTitle: String,
+    val category: String,
+    @SerialName("completed_at") val completedAt: String,
+    @SerialName("completion_source") val completionSource: String = "BUSINESS_APPROVAL",
+    @SerialName("business_name") val businessName: String,
+    @SerialName("business_city") val businessCity: String? = null,
+    @SerialName("sanitized_summary") val sanitizedSummary: String,
+    val rating: Int = 5,
+    @SerialName("review_snippet") val reviewSnippet: String? = null,
+    @SerialName("is_public") val isPublic: Boolean = true,
+    @SerialName("display_order") val displayOrder: Int = 0,
+    @SerialName("badge_title") val badgeTitle: String = "Verified Work Delivery",
+    @SerialName("created_at") val createdAt: String? = null
+)
+
+@Serializable
+data class ScopeChangeRequest(
+    val id: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("offer_id") val offerId: String,
+    @SerialName("requested_by_user_id") val requestedByUserId: String,
+    @SerialName("requested_by_name") val requestedByName: String,
+    @SerialName("requested_by_role") val requestedByRole: String,
+    val reason: String,
+    @SerialName("proposed_budget_inr") val proposedBudgetInr: Double,
+    @SerialName("proposed_deadline") val proposedDeadline: String,
+    @SerialName("proposed_revisions") val proposedRevisions: Int,
+    @SerialName("proposed_scope_summary") val proposedScopeSummary: String,
+    @SerialName("proposed_deliverables") val proposedDeliverables: List<DeliverableItem> = emptyList(),
+    val status: String = "PENDING",
+    @SerialName("rejection_reason") val rejectionReason: String? = null,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("responded_at") val respondedAt: String? = null,
+    @SerialName("responded_by_user_id") val respondedByUserId: String? = null
+)
+
+@Serializable
+data class WorkTrailEvent(
+    val id: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("event_type") val eventType: String,
+    val title: String,
+    val description: String,
+    val timestamp: String,
+    @SerialName("actor_name") val actorName: String,
+    @SerialName("actor_role") val actorRole: String,
+    @SerialName("is_verified") val isVerified: Boolean = false,
+    @SerialName("verification_note") val verificationNote: String? = null
+)
+
 

@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { ProjectListing, User, Application } from '../../types';
 import { marketplaceStore } from '../../lib/storage';
 import { ApplicationSubmissionSchema } from '../../lib/schemas';
+import { ScopeLockModal } from '../common/ScopeLockModal';
+import { ScopeChangeModal } from '../common/ScopeChangeModal';
+import { WorkTrail } from '../common/WorkTrail';
 import {
   ChevronLeft,
   ShieldCheck,
@@ -15,7 +18,9 @@ import {
   AlertCircle,
   ExternalLink,
   Plus,
-  Trash2
+  Trash2,
+  Lock,
+  X
 } from 'lucide-react';
 
 interface Props {
@@ -41,6 +46,11 @@ export const ProjectDetail: React.FC<Props> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Modals state
+  const [showScopeLockModal, setShowScopeLockModal] = useState(false);
+  const [showWorkTrailModal, setShowWorkTrailModal] = useState(false);
+  const [showScopeChangeModal, setShowScopeChangeModal] = useState(false);
 
   // Check if current user already applied
   const existingApp = currentUser
@@ -180,6 +190,37 @@ export const ProjectDetail: React.FC<Props> = ({
               </span>
             ))}
           </div>
+        </div>
+
+        {/* Scope Lock & Work Trail Action Bar */}
+        <div className="flex flex-wrap items-center gap-2.5 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <button
+            onClick={() => setShowScopeLockModal(true)}
+            className="px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold hover:border-emerald-500 transition flex items-center gap-1.5 shadow-2xs"
+          >
+            <Lock className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Scope Lock Terms</span>
+          </button>
+
+          <button
+            onClick={() => setShowWorkTrailModal(true)}
+            className="px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold hover:border-indigo-500 transition flex items-center gap-1.5 shadow-2xs"
+          >
+            <Clock className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Work Trail Timeline</span>
+          </button>
+
+          {currentUser &&
+            (project.status === 'IN_PROGRESS' || project.status === 'REVISION_REQUESTED') &&
+            (currentUser.id === project.businessId || currentUser.id === project.selectedStudentId) && (
+              <button
+                onClick={() => setShowScopeChangeModal(true)}
+                className="px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold hover:border-indigo-500 transition flex items-center gap-1.5 shadow-2xs"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Propose Scope Change</span>
+              </button>
+            )}
         </div>
       </div>
 
@@ -426,6 +467,45 @@ export const ProjectDetail: React.FC<Props> = ({
           )}
         </div>
       </div>
+
+      {/* Scope Lock Modal */}
+      {showScopeLockModal && (
+        <ScopeLockModal
+          project={project}
+          currentUser={currentUser}
+          onClose={() => setShowScopeLockModal(false)}
+          onRequestScopeChange={() => {
+            setShowScopeLockModal(false);
+            setShowScopeChangeModal(true);
+          }}
+        />
+      )}
+
+      {/* Work Trail Modal */}
+      {showWorkTrailModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-8 my-8 max-h-[85vh] overflow-y-auto">
+            <WorkTrail
+              projectId={project.id}
+              currentUser={currentUser}
+              onClose={() => setShowWorkTrailModal(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Propose Scope Change Modal */}
+      {showScopeChangeModal && currentUser && (
+        <ScopeChangeModal
+          project={project}
+          currentUser={currentUser}
+          onClose={() => setShowScopeChangeModal(false)}
+          onSuccess={() => {
+            setShowScopeChangeModal(false);
+            window.location.reload();
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -90,6 +90,8 @@ export const INITIAL_STUDENT_PROFILES: Record<string, StudentProfile> = {
     averageRating: 5.0,
     verifiedPortfolioSlug: 'aarav-sharma',
     pinnedBadgeIds: ['early-adopter', 'top-rated', 'project-completed'],
+    availability: 'AVAILABLE',
+    coverImageUrl: '/src/assets/images/hero_student_creator_1791569699063.jpg',
   },
   'student-2': {
     userId: 'student-2',
@@ -111,6 +113,8 @@ export const INITIAL_STUDENT_PROFILES: Record<string, StudentProfile> = {
     averageRating: 4.9,
     verifiedPortfolioSlug: 'ananya-iyer',
     pinnedBadgeIds: ['early-adopter', 'top-rated', 'project-completed', 'direct-payout'],
+    availability: 'AVAILABLE',
+    coverImageUrl: '/src/assets/images/showcase_brand_design_1791569720240.jpg',
   }
 };
 
@@ -435,6 +439,9 @@ export const INITIAL_PROOF_PASSPORT_ITEMS: ProofPassportItem[] = [
     displayOrder: 1,
     badgeTitle: 'Verified Work Delivery',
     createdAt: '2026-09-16T18:00:00.000Z',
+    skills: ['Next.js', 'React', 'TypeScript', 'Tailwind CSS'],
+    deliverables: ['Production Next.js Codebase', 'Interactive Pricing & Currency Widget', 'Lighthouse 98 Performance Audit'],
+    coverImage: '/src/assets/images/showcase_mobile_ui_1791569710272.jpg',
   },
   {
     id: 'passport-item-2',
@@ -453,6 +460,9 @@ export const INITIAL_PROOF_PASSPORT_ITEMS: ProofPassportItem[] = [
     displayOrder: 2,
     badgeTitle: 'Dispute Confirmed Outcome',
     createdAt: '2026-08-10T14:00:00.000Z',
+    skills: ['SVG Vectors', 'Iconography', 'Illustrator', 'Design Systems'],
+    deliverables: ['40 Scalable Vector Icons (Dark/Light)', 'Icon Spec Sheet & Usage Rules'],
+    coverImage: '/src/assets/images/showcase_brand_design_1791569720240.jpg',
   }
 ];
 

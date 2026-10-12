@@ -62,6 +62,9 @@ export interface StudentProfile {
   averageRating: number;
   verifiedPortfolioSlug: string;
   pinnedBadgeIds?: string[];
+  coverImageUrl?: string;
+  availability?: 'AVAILABLE' | 'BUSY' | 'UNAVAILABLE';
+  socialLinks?: { platform: string; url: string }[];
 }
 
 export type BadgeTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
@@ -239,6 +242,9 @@ export interface ProofPassportItem {
   displayOrder: number;
   badgeTitle?: string;
   createdAt: string;
+  skills?: string[];
+  deliverables?: string[];
+  coverImage?: string;
 }
 
 // Scope Lock Change Request
@@ -389,6 +395,7 @@ export interface PaymentRecord {
   paymentProofUrl?: string;
   recordedByUserId: string;
   recordedAt?: string;
+  createdAt?: string;
   confirmedAt?: string;
   confirmedByUserId?: string;
   disputeReason?: string;
