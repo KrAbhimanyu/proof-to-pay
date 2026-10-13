@@ -124,6 +124,9 @@ class SupabaseService {
       isSuspended: data.is_suspended,
       suspensionReason: data.suspension_reason,
       createdAt: data.created_at,
+      githubUrl: data.github_url || null,
+      linkedinUrl: data.linkedin_url || null,
+      behanceUrl: data.behance_url || null,
     };
   }
 
@@ -139,6 +142,17 @@ class SupabaseService {
       if (error.code === 'PGRST116') return null;
       throw error;
     }
+    const githubUrl = data.github_url || null;
+    const linkedinUrl = data.linkedin_url || null;
+    const behanceUrl = data.behance_url || null;
+    const socialLinks = data.social_links || (
+      [
+        githubUrl ? { platform: 'github', url: githubUrl } : null,
+        linkedinUrl ? { platform: 'linkedin', url: linkedinUrl } : null,
+        behanceUrl ? { platform: 'behance', url: behanceUrl } : null,
+      ].filter(Boolean) as { platform: string; url: string }[]
+    );
+
     return {
       userId: data.user_id,
       headline: data.headline || '',
@@ -155,7 +169,64 @@ class SupabaseService {
       completedProjectsCount: data.completed_projects_count || 0,
       averageRating: data.average_rating ? Number(data.average_rating) : 0,
       verifiedPortfolioSlug: data.verified_portfolio_slug || '',
+      githubUrl,
+      linkedinUrl,
+      behanceUrl,
+      socialLinks,
     };
+  }
+
+  /**
+   * Retrieves non-null social media links (GitHub, LinkedIn, Behance) from profile tables
+   */
+  public async getProfileSocialLinks(userId: string): Promise<{
+    github: string | null;
+    linkedin: string | null;
+    behance: string | null;
+  }> {
+    const sb = this.getClient();
+    if (!sb) return { github: null, linkedin: null, behance: null };
+    try {
+      const { data: prof } = await sb
+        .from('profiles')
+        .select('github_url, linkedin_url, behance_url')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const { data: sProf } = await sb
+        .from('student_profiles')
+        .select('github_url, linkedin_url, behance_url, social_links')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      const github =
+        prof?.github_url ||
+        sProf?.github_url ||
+        (Array.isArray(sProf?.social_links)
+          ? sProf.social_links.find((s: any) => s?.platform?.toLowerCase() === 'github')?.url
+          : null) ||
+        null;
+
+      const linkedin =
+        prof?.linkedin_url ||
+        sProf?.linkedin_url ||
+        (Array.isArray(sProf?.social_links)
+          ? sProf.social_links.find((s: any) => s?.platform?.toLowerCase() === 'linkedin')?.url
+          : null) ||
+        null;
+
+      const behance =
+        prof?.behance_url ||
+        sProf?.behance_url ||
+        (Array.isArray(sProf?.social_links)
+          ? sProf.social_links.find((s: any) => s?.platform?.toLowerCase() === 'behance')?.url
+          : null) ||
+        null;
+
+      return { github, linkedin, behance };
+    } catch {
+      return { github: null, linkedin: null, behance: null };
+    }
   }
 
   public async getBusinessProfile(userId: string): Promise<BusinessProfile | null> {

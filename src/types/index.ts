@@ -43,6 +43,9 @@ export interface User {
   phone?: string;
   city?: string;
   state?: string;
+  githubUrl?: string | null;
+  linkedinUrl?: string | null;
+  behanceUrl?: string | null;
 }
 
 export interface StudentProfile {
@@ -65,6 +68,9 @@ export interface StudentProfile {
   coverImageUrl?: string;
   availability?: 'AVAILABLE' | 'BUSY' | 'UNAVAILABLE';
   socialLinks?: { platform: string; url: string }[];
+  githubUrl?: string | null;
+  linkedinUrl?: string | null;
+  behanceUrl?: string | null;
 }
 
 export type BadgeTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';

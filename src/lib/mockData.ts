@@ -26,6 +26,9 @@ export const INITIAL_USERS: User[] = [
     city: 'New Delhi',
     state: 'Delhi',
     createdAt: '2026-08-15T10:00:00.000Z',
+    githubUrl: 'https://github.com/aarav-sharma',
+    linkedinUrl: 'https://linkedin.com/in/aarav-sharma-dev',
+    behanceUrl: 'https://behance.net/aaravsharma',
   },
   {
     id: 'student-2',
@@ -36,6 +39,9 @@ export const INITIAL_USERS: User[] = [
     city: 'Ahmedabad',
     state: 'Gujarat',
     createdAt: '2026-08-20T11:30:00.000Z',
+    githubUrl: 'https://github.com/ananyaiyer',
+    linkedinUrl: 'https://linkedin.com/in/ananyaiyer',
+    behanceUrl: 'https://behance.net/ananyaiyer',
   },
   {
     id: 'business-1',
@@ -92,6 +98,9 @@ export const INITIAL_STUDENT_PROFILES: Record<string, StudentProfile> = {
     pinnedBadgeIds: ['early-adopter', 'top-rated', 'project-completed'],
     availability: 'AVAILABLE',
     coverImageUrl: '/src/assets/images/hero_student_creator_1791569699063.jpg',
+    githubUrl: 'https://github.com/aarav-sharma',
+    linkedinUrl: 'https://linkedin.com/in/aarav-sharma-dev',
+    behanceUrl: 'https://behance.net/aaravsharma',
     socialLinks: [
       { platform: 'github', url: 'https://github.com/aarav-sharma' },
       { platform: 'linkedin', url: 'https://linkedin.com/in/aarav-sharma-dev' },
@@ -120,6 +129,9 @@ export const INITIAL_STUDENT_PROFILES: Record<string, StudentProfile> = {
     pinnedBadgeIds: ['early-adopter', 'top-rated', 'project-completed', 'direct-payout'],
     availability: 'AVAILABLE',
     coverImageUrl: '/src/assets/images/showcase_brand_design_1791569720240.jpg',
+    githubUrl: 'https://github.com/ananyaiyer',
+    linkedinUrl: 'https://linkedin.com/in/ananyaiyer',
+    behanceUrl: 'https://behance.net/ananyaiyer',
     socialLinks: [
       { platform: 'behance', url: 'https://behance.net/ananyaiyer' },
       { platform: 'linkedin', url: 'https://linkedin.com/in/ananyaiyer' },

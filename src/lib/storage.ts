@@ -255,9 +255,35 @@ class MarketplaceStore {
     if (data.pinnedBadgeIds !== undefined) sanitized.pinnedBadgeIds = data.pinnedBadgeIds;
     if (data.coverImageUrl !== undefined) sanitized.coverImageUrl = data.coverImageUrl;
     if (data.availability !== undefined) sanitized.availability = data.availability;
-    if (data.socialLinks !== undefined) sanitized.socialLinks = data.socialLinks;
+    if (data.socialLinks !== undefined) {
+      sanitized.socialLinks = data.socialLinks;
+      // Also synchronize top-level profile table fields
+      const gh = data.socialLinks.find((s) => s.platform.toLowerCase() === 'github');
+      const li = data.socialLinks.find((s) => s.platform.toLowerCase() === 'linkedin');
+      const be = data.socialLinks.find((s) => s.platform.toLowerCase() === 'behance');
+      sanitized.githubUrl = gh?.url || null;
+      sanitized.linkedinUrl = li?.url || null;
+      sanitized.behanceUrl = be?.url || null;
+    }
+    if (data.githubUrl !== undefined) sanitized.githubUrl = data.githubUrl ? data.githubUrl.trim() : null;
+    if (data.linkedinUrl !== undefined) sanitized.linkedinUrl = data.linkedinUrl ? data.linkedinUrl.trim() : null;
+    if (data.behanceUrl !== undefined) sanitized.behanceUrl = data.behanceUrl ? data.behanceUrl.trim() : null;
 
     const result = this.updateStudentProfile(profileUserId, sanitized);
+
+    // Synchronize user record in users table/list as well
+    const users = this.getUsers();
+    const uIdx = users.findIndex((u) => u.id === profileUserId);
+    if (uIdx !== -1) {
+      users[uIdx] = {
+        ...users[uIdx],
+        githubUrl: sanitized.githubUrl !== undefined ? sanitized.githubUrl : users[uIdx].githubUrl,
+        linkedinUrl: sanitized.linkedinUrl !== undefined ? sanitized.linkedinUrl : users[uIdx].linkedinUrl,
+        behanceUrl: sanitized.behanceUrl !== undefined ? sanitized.behanceUrl : users[uIdx].behanceUrl,
+      };
+      this.set(STORAGE_KEYS.USERS, users);
+    }
+
     this.logAudit(user, 'UPDATED_PORTFOLIO_PRESENTATION', 'USER', profileUserId, 'Updated public creator profile fields and presentation.');
     return result;
   }

@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, StudentProfile, ProofPassportItem, VerifiedReview, ProjectListing } from '../../types';
 import { marketplaceStore } from '../../lib/storage';
+import { tryGetSupabaseClient } from '../../lib/supabaseClient';
 import { Badges } from '../common/Badges';
 import confetti from 'canvas-confetti';
 import {
@@ -221,26 +222,187 @@ export const PublicPortfolio: React.FC<Props> = ({
     return Array.from(set);
   }, [completedProjects, allPassportItems]);
 
-  // Social media links
-  const githubLink = useMemo(
-    () => profile?.socialLinks?.find((s) => s.platform.toLowerCase() === 'github'),
-    [profile?.socialLinks, refreshCounter]
-  );
-  const linkedinLink = useMemo(
-    () => profile?.socialLinks?.find((s) => s.platform.toLowerCase() === 'linkedin'),
-    [profile?.socialLinks, refreshCounter]
-  );
-  const behanceLink = useMemo(
-    () => profile?.socialLinks?.find((s) => s.platform.toLowerCase() === 'behance'),
-    [profile?.socialLinks, refreshCounter]
-  );
+  // Live profile table data from Supabase (if configured)
+  const [liveProfileData, setLiveProfileData] = useState<{
+    githubUrl: string | null;
+    linkedinUrl: string | null;
+    behanceUrl: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let isSubscribed = true;
+    async function loadProfileFromSupabase() {
+      try {
+        const sb = tryGetSupabaseClient();
+        if (!sb || !studentUser?.id) return;
+
+        // Query public.profiles table
+        const { data: profRow } = await sb
+          .from('profiles')
+          .select('github_url, linkedin_url, behance_url')
+          .eq('id', studentUser.id)
+          .maybeSingle();
+
+        // Query public.student_profiles table
+        const { data: sProfRow } = await sb
+          .from('student_profiles')
+          .select('github_url, linkedin_url, behance_url, social_links')
+          .eq('user_id', studentUser.id)
+          .maybeSingle();
+
+        if (isSubscribed && (profRow || sProfRow)) {
+          const gh =
+            profRow?.github_url ||
+            sProfRow?.github_url ||
+            (Array.isArray(sProfRow?.social_links)
+              ? sProfRow.social_links.find((s: any) => s?.platform?.toLowerCase() === 'github')?.url
+              : null) ||
+            null;
+          const li =
+            profRow?.linkedin_url ||
+            sProfRow?.linkedin_url ||
+            (Array.isArray(sProfRow?.social_links)
+              ? sProfRow.social_links.find((s: any) => s?.platform?.toLowerCase() === 'linkedin')?.url
+              : null) ||
+            null;
+          const be =
+            profRow?.behance_url ||
+            sProfRow?.behance_url ||
+            (Array.isArray(sProfRow?.social_links)
+              ? sProfRow.social_links.find((s: any) => s?.platform?.toLowerCase() === 'behance')?.url
+              : null) ||
+            null;
+
+          setLiveProfileData({
+            githubUrl: gh,
+            linkedinUrl: li,
+            behanceUrl: be,
+          });
+        }
+      } catch {
+        // Fall back gracefully to local store
+      }
+    }
+    loadProfileFromSupabase();
+    return () => {
+      isSubscribed = false;
+    };
+  }, [studentUser?.id, refreshCounter]);
+
+  // Social media links retrieved from user's profile table
+  const githubLink = useMemo(() => {
+    const raw =
+      liveProfileData?.githubUrl ??
+      profile?.githubUrl ??
+      studentUser?.githubUrl ??
+      profile?.socialLinks?.find((s) => s.platform.toLowerCase() === 'github')?.url ??
+      null;
+    if (!raw || typeof raw !== 'string' || !raw.trim()) return null;
+    return { platform: 'github', url: normalizeSocialUrl('github', raw) };
+  }, [liveProfileData, profile, studentUser, refreshCounter]);
+
+  const linkedinLink = useMemo(() => {
+    const raw =
+      liveProfileData?.linkedinUrl ??
+      profile?.linkedinUrl ??
+      studentUser?.linkedinUrl ??
+      profile?.socialLinks?.find((s) => s.platform.toLowerCase() === 'linkedin')?.url ??
+      null;
+    if (!raw || typeof raw !== 'string' || !raw.trim()) return null;
+    return { platform: 'linkedin', url: normalizeSocialUrl('linkedin', raw) };
+  }, [liveProfileData, profile, studentUser, refreshCounter]);
+
+  const behanceLink = useMemo(() => {
+    const raw =
+      liveProfileData?.behanceUrl ??
+      profile?.behanceUrl ??
+      studentUser?.behanceUrl ??
+      profile?.socialLinks?.find((s) => s.platform.toLowerCase() === 'behance')?.url ??
+      null;
+    if (!raw || typeof raw !== 'string' || !raw.trim()) return null;
+    return { platform: 'behance', url: normalizeSocialUrl('behance', raw) };
+  }, [liveProfileData, profile, studentUser, refreshCounter]);
+
   const otherSocialLinks = useMemo(
     () => (profile?.socialLinks || []).filter(
       (s) => !['github', 'linkedin', 'behance'].includes(s.platform.toLowerCase())
     ),
     [profile?.socialLinks, refreshCounter]
   );
-  const hasAnySocial = Boolean(githubLink || linkedinLink || behanceLink || otherSocialLinks.length > 0);
+
+  // Active verified social media cards (strictly excludes null/empty values with full brand assets)
+  const activeSocialCards = useMemo(() => {
+    const items: Array<{
+      platform: 'GitHub' | 'LinkedIn' | 'Behance';
+      id: 'github' | 'linkedin' | 'behance';
+      url: string;
+      handle: string;
+      description: string;
+      badgeText: string;
+      brandColorHex: string;
+      brandBgClass: string;
+      brandTextClass: string;
+      brandBorderClass: string;
+      brandHoverClass: string;
+      icon: React.FC<{ className?: string }>;
+    }> = [];
+
+    // ONLY SHOW IF NOT NULL AND NOT EMPTY
+    if (githubLink?.url) {
+      items.push({
+        platform: 'GitHub',
+        id: 'github',
+        url: githubLink.url,
+        handle: extractSocialHandle(githubLink.url, 'github'),
+        description: 'Code repositories, commits, and open-source contributions',
+        badgeText: 'Developer Profile',
+        brandColorHex: '#24292F',
+        brandBgClass: 'bg-[#24292F] dark:bg-black',
+        brandTextClass: 'text-white',
+        brandBorderClass: 'border-slate-800 dark:border-slate-700',
+        brandHoverClass: 'hover:bg-black dark:hover:bg-slate-900',
+        icon: GithubIcon,
+      });
+    }
+
+    if (linkedinLink?.url) {
+      items.push({
+        platform: 'LinkedIn',
+        id: 'linkedin',
+        url: linkedinLink.url,
+        handle: extractSocialHandle(linkedinLink.url, 'linkedin'),
+        description: 'Professional credentials, career history, and industry network',
+        badgeText: 'Professional Network',
+        brandColorHex: '#0A66C2',
+        brandBgClass: 'bg-[#0A66C2]',
+        brandTextClass: 'text-white',
+        brandBorderClass: 'border-blue-600 dark:border-blue-700',
+        brandHoverClass: 'hover:bg-[#004182]',
+        icon: LinkedinIcon,
+      });
+    }
+
+    if (behanceLink?.url) {
+      items.push({
+        platform: 'Behance',
+        id: 'behance',
+        url: behanceLink.url,
+        handle: extractSocialHandle(behanceLink.url, 'behance'),
+        description: 'Creative design case studies, mobile UI, and visual projects',
+        badgeText: 'Design Showcase',
+        brandColorHex: '#0057FF',
+        brandBgClass: 'bg-[#0057FF]',
+        brandTextClass: 'text-white',
+        brandBorderClass: 'border-blue-500 dark:border-blue-600',
+        brandHoverClass: 'hover:bg-[#0040c7]',
+        icon: BehanceIcon,
+      });
+    }
+
+    return items;
+  }, [githubLink, linkedinLink, behanceLink]);
+
+  const hasAnySocial = Boolean(activeSocialCards.length > 0 || otherSocialLinks.length > 0);
 
   // Filtered Proof Passport Items
   const filteredPassportItems = useMemo(() => {
@@ -312,10 +474,22 @@ export const PublicPortfolio: React.FC<Props> = ({
     setEditCoverImage(profile.coverImageUrl || '');
     setEditExpLevel(profile.experienceLevel || 'INTERMEDIATE');
 
-    // Extract social links
-    const gh = profile.socialLinks?.find((s) => s.platform.toLowerCase() === 'github')?.url || '';
-    const li = profile.socialLinks?.find((s) => s.platform.toLowerCase() === 'linkedin')?.url || '';
-    const be = profile.socialLinks?.find((s) => s.platform.toLowerCase() === 'behance')?.url || '';
+    // Extract social links from profile table
+    const gh =
+      profile.githubUrl ||
+      profile.socialLinks?.find((s) => s.platform.toLowerCase() === 'github')?.url ||
+      studentUser.githubUrl ||
+      '';
+    const li =
+      profile.linkedinUrl ||
+      profile.socialLinks?.find((s) => s.platform.toLowerCase() === 'linkedin')?.url ||
+      studentUser.linkedinUrl ||
+      '';
+    const be =
+      profile.behanceUrl ||
+      profile.socialLinks?.find((s) => s.platform.toLowerCase() === 'behance')?.url ||
+      studentUser.behanceUrl ||
+      '';
     setEditGithub(gh);
     setEditLinkedin(li);
     setEditBehance(be);
@@ -329,16 +503,14 @@ export const PublicPortfolio: React.FC<Props> = ({
     if (!currentUser || !isOwner) return;
 
     try {
+      const ghUrl = editGithub.trim() ? normalizeSocialUrl('github', editGithub) : null;
+      const liUrl = editLinkedin.trim() ? normalizeSocialUrl('linkedin', editLinkedin) : null;
+      const beUrl = editBehance.trim() ? normalizeSocialUrl('behance', editBehance) : null;
+
       const newSocialLinks: { platform: string; url: string }[] = [];
-      if (editGithub.trim()) {
-        newSocialLinks.push({ platform: 'github', url: normalizeSocialUrl('github', editGithub) });
-      }
-      if (editLinkedin.trim()) {
-        newSocialLinks.push({ platform: 'linkedin', url: normalizeSocialUrl('linkedin', editLinkedin) });
-      }
-      if (editBehance.trim()) {
-        newSocialLinks.push({ platform: 'behance', url: normalizeSocialUrl('behance', editBehance) });
-      }
+      if (ghUrl) newSocialLinks.push({ platform: 'github', url: ghUrl });
+      if (liUrl) newSocialLinks.push({ platform: 'linkedin', url: liUrl });
+      if (beUrl) newSocialLinks.push({ platform: 'behance', url: beUrl });
 
       // Preserve any other platforms
       const otherPlatforms = (profile?.socialLinks || []).filter(
@@ -357,7 +529,32 @@ export const PublicPortfolio: React.FC<Props> = ({
         availability: editAvailability,
         coverImageUrl: editCoverImage.trim() || undefined,
         socialLinks: combinedSocialLinks,
+        githubUrl: ghUrl,
+        linkedinUrl: liUrl,
+        behanceUrl: beUrl,
       });
+
+      // Best-effort live update to Supabase profile tables if client configured
+      const sb = tryGetSupabaseClient();
+      if (sb) {
+        Promise.resolve(
+          sb.from('profiles').update({
+            github_url: ghUrl,
+            linkedin_url: liUrl,
+            behance_url: beUrl,
+          }).eq('id', studentUser.id)
+        ).catch(() => {});
+
+        Promise.resolve(
+          sb.from('student_profiles').update({
+            github_url: ghUrl,
+            linkedin_url: liUrl,
+            behance_url: beUrl,
+            social_links: combinedSocialLinks,
+          }).eq('user_id', studentUser.id)
+        ).catch(() => {});
+      }
+
       setShowEditProfileModal(false);
       setRefreshCounter((c) => c + 1);
       triggerToast('Profile & social media links updated successfully!');
@@ -921,6 +1118,142 @@ export const PublicPortfolio: React.FC<Props> = ({
             </span>
           </div>
         </div>
+
+        {/* ============================================================== */}
+        {/* NEW SECTION: SOCIAL MEDIA LINKS (PROFILE TABLE RETRIEVAL) */}
+        {/* Displays GitHub, LinkedIn, Behance with official branding */}
+        {/* Strictly filters out and hides any links that are null */}
+        {/* ============================================================== */}
+        <section
+          id="social-media-links-section"
+          aria-labelledby="social-links-section-title"
+          className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-sm"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-100 dark:border-slate-800">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                  <FolderGit2 className="w-4 h-4" />
+                </div>
+                <h3 id="social-links-section-title" className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
+                  Social Media & Online Presence
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  {activeSocialCards.length} {activeSocialCards.length === 1 ? 'Profile' : 'Profiles'} Linked
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Verified external links (GitHub, LinkedIn, Behance) retrieved directly from {studentUser.name}'s profile table.
+              </p>
+            </div>
+
+            {isOwner && (
+              <button
+                onClick={handleOpenEditProfile}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition shrink-0 self-start sm:self-auto"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{activeSocialCards.length > 0 ? 'Manage Profiles' : '+ Connect Profiles'}</span>
+              </button>
+            )}
+          </div>
+
+          {activeSocialCards.length > 0 ? (
+            <div className={`mt-5 grid grid-cols-1 ${activeSocialCards.length === 1 ? 'max-w-md' : activeSocialCards.length === 2 ? 'sm:grid-cols-2 max-w-3xl' : 'sm:grid-cols-2 lg:grid-cols-3'} gap-4`}>
+              {activeSocialCards.map((item) => {
+                const IconComponent = item.icon;
+                return (
+                  <div
+                    key={item.id}
+                    className="group relative p-5 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition flex flex-col justify-between gap-4 hover:shadow-md"
+                  >
+                    <div>
+                      {/* Brand Header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-11 h-11 rounded-2xl ${item.brandBgClass} ${item.brandTextClass} flex items-center justify-center shrink-0 shadow-md transition-transform group-hover:scale-105`}
+                          >
+                            <IconComponent className="w-5 h-5 text-white" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <h4 className="font-black text-sm text-slate-900 dark:text-white truncate">
+                                {item.platform}
+                              </h4>
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Profile connected" />
+                            </div>
+                            <span className="font-mono text-xs font-semibold text-slate-600 dark:text-slate-300 truncate block">
+                              {item.handle}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shrink-0">
+                          {item.badgeText}
+                        </span>
+                      </div>
+
+                      {/* Description */}
+                      <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        {item.description}
+                      </p>
+                    </div>
+
+                    {/* Action Footer */}
+                    <div className="pt-3 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-mono text-slate-400 truncate max-w-[170px]" title={item.url}>
+                        {item.url.replace(/^https?:\/\//, '')}
+                      </span>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(item.url);
+                            triggerToast(`${item.platform} link copied!`);
+                          }}
+                          className="p-1.5 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-300 border border-slate-200 dark:border-slate-600 transition"
+                          title={`Copy ${item.platform} URL`}
+                          aria-label={`Copy ${item.platform} URL`}
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${item.brandBgClass} ${item.brandHoverClass} ${item.brandTextClass} font-bold text-xs shadow-2xs transition group/btn`}
+                          title={`Visit ${studentUser.name}'s ${item.platform} profile`}
+                        >
+                          <span>Visit</span>
+                          <ExternalLink className="w-3 h-3 group-hover/btn:translate-x-0.5 transition-transform" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-4 p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 text-center">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {isOwner
+                  ? 'No external profiles currently linked in your profile table. Add your GitHub, LinkedIn, or Behance to highlight your code and visual designs.'
+                  : 'This creator has not linked any external social media profiles in their profile table yet.'}
+              </p>
+              {isOwner && (
+                <button
+                  onClick={handleOpenEditProfile}
+                  className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-2xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Link GitHub, LinkedIn, or Behance</span>
+                </button>
+              )}
+            </div>
+          )}
+        </section>
 
         {/* ============================================================== */}
         {/* TABS NAVIGATION */}
@@ -1683,112 +2016,58 @@ export const PublicPortfolio: React.FC<Props> = ({
                   )}
                 </div>
 
-                <div className="space-y-2 text-xs">
-                  {/* GitHub Item */}
-                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 flex items-center justify-between gap-2 group">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                        <GithubIcon className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-bold text-slate-900 dark:text-white truncate">GitHub</div>
-                        <div className="text-[11px] text-slate-500 truncate font-mono">
-                          {githubLink ? extractSocialHandle(githubLink.url, 'github') : 'Not linked'}
+                {activeSocialCards.length > 0 ? (
+                  <div className="space-y-2 text-xs">
+                    {activeSocialCards.map((item) => {
+                      const IconComponent = item.icon;
+                      return (
+                        <div
+                          key={item.id}
+                          className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 flex items-center justify-between gap-2 group hover:border-slate-300 dark:hover:border-slate-600 transition"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className={`w-8 h-8 rounded-xl ${item.brandBgClass} ${item.brandTextClass} flex items-center justify-center shrink-0 shadow-2xs`}>
+                              <IconComponent className="w-4 h-4 text-white" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
+                                <span>{item.platform}</span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                              </div>
+                              <div className="text-[11px] text-slate-500 truncate font-mono">
+                                {item.handle}
+                              </div>
+                            </div>
+                          </div>
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-[11px] border border-slate-200 dark:border-slate-600 flex items-center gap-1 shrink-0 transition"
+                            title={`Open ${item.platform}`}
+                          >
+                            <span>Visit</span>
+                            <ExternalLink className="w-3 h-3 text-slate-400" />
+                          </a>
                         </div>
-                      </div>
-                    </div>
-                    {githubLink ? (
-                      <a
-                        href={githubLink.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-[11px] border border-slate-200 dark:border-slate-600 flex items-center gap-1 shrink-0 transition"
-                      >
-                        <span>Visit</span>
-                        <ExternalLink className="w-3 h-3 text-slate-400" />
-                      </a>
-                    ) : isOwner ? (
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 text-center border border-dashed border-slate-200 dark:border-slate-800">
+                    <p className="text-xs text-slate-500">
+                      {isOwner ? 'No social links connected yet.' : 'No external social profiles linked.'}
+                    </p>
+                    {isOwner && (
                       <button
                         onClick={handleOpenEditProfile}
-                        className="text-[11px] text-emerald-600 font-bold hover:underline shrink-0"
+                        className="mt-2 text-xs text-emerald-600 font-bold hover:underline"
                       >
-                        + Connect
+                        + Connect Profiles
                       </button>
-                    ) : (
-                      <span className="text-[10px] text-slate-400 shrink-0">Unlinked</span>
                     )}
                   </div>
-
-                  {/* LinkedIn Item */}
-                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 flex items-center justify-between gap-2 group">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-xl bg-[#0A66C2] text-white flex items-center justify-center shrink-0 shadow-2xs">
-                        <LinkedinIcon className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-bold text-slate-900 dark:text-white truncate">LinkedIn</div>
-                        <div className="text-[11px] text-slate-500 truncate font-mono">
-                          {linkedinLink ? extractSocialHandle(linkedinLink.url, 'linkedin') : 'Not linked'}
-                        </div>
-                      </div>
-                    </div>
-                    {linkedinLink ? (
-                      <a
-                        href={linkedinLink.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-[11px] border border-slate-200 dark:border-slate-600 flex items-center gap-1 shrink-0 transition"
-                      >
-                        <span>Visit</span>
-                        <ExternalLink className="w-3 h-3 text-slate-400" />
-                      </a>
-                    ) : isOwner ? (
-                      <button
-                        onClick={handleOpenEditProfile}
-                        className="text-[11px] text-emerald-600 font-bold hover:underline shrink-0"
-                      >
-                        + Connect
-                      </button>
-                    ) : (
-                      <span className="text-[10px] text-slate-400 shrink-0">Unlinked</span>
-                    )}
-                  </div>
-
-                  {/* Behance Item */}
-                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 flex items-center justify-between gap-2 group">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-xl bg-[#0057FF] text-white flex items-center justify-center shrink-0 shadow-2xs">
-                        <BehanceIcon className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-bold text-slate-900 dark:text-white truncate">Behance</div>
-                        <div className="text-[11px] text-slate-500 truncate font-mono">
-                          {behanceLink ? extractSocialHandle(behanceLink.url, 'behance') : 'Not linked'}
-                        </div>
-                      </div>
-                    </div>
-                    {behanceLink ? (
-                      <a
-                        href={behanceLink.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-[11px] border border-slate-200 dark:border-slate-600 flex items-center gap-1 shrink-0 transition"
-                      >
-                        <span>Visit</span>
-                        <ExternalLink className="w-3 h-3 text-slate-400" />
-                      </a>
-                    ) : isOwner ? (
-                      <button
-                        onClick={handleOpenEditProfile}
-                        className="text-[11px] text-emerald-600 font-bold hover:underline shrink-0"
-                      >
-                        + Connect
-                      </button>
-                    ) : (
-                      <span className="text-[10px] text-slate-400 shrink-0">Unlinked</span>
-                    )}
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* External Links */}
