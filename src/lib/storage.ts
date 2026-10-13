@@ -44,6 +44,7 @@ import {
   INITIAL_PROOF_PASSPORT_ITEMS,
   INITIAL_SCOPE_CHANGE_REQUESTS
 } from './mockData';
+import { isSupabaseConfigured, getSupabaseConfig } from './supabaseClient';
 
 const STORAGE_KEYS = {
   USERS: 'ptp_users',
@@ -98,13 +99,45 @@ class MarketplaceStore {
   }
 
   public isDemoMode(): boolean {
-    // Demo mode is active when live Supabase credentials are not connected
-    const config = this.get<{ isDemoOverride?: boolean }>('ptp_mode_override', { isDemoOverride: true });
-    return config.isDemoOverride ?? true;
+    // If live Supabase credentials are not configured, demo mode is active
+    if (!isSupabaseConfigured()) {
+      return true;
+    }
+    const config = this.get<{ isDemoOverride?: boolean }>('ptp_mode_override', { isDemoOverride: false });
+    return config.isDemoOverride ?? false;
   }
 
   public setDemoMode(isDemo: boolean): void {
     this.set('ptp_mode_override', { isDemoOverride: isDemo });
+  }
+
+  public isLiveBackendAvailable(): boolean {
+    return isSupabaseConfigured() && !this.isDemoMode();
+  }
+
+  public getBackendStatus(): {
+    isLive: boolean;
+    mode: 'PRODUCTION_SUPABASE' | 'OFFLINE_DEMO_SANDBOX';
+    url: string;
+    notice: string;
+  } {
+    const config = getSupabaseConfig();
+    if (config.isConfigured && !this.isDemoMode()) {
+      return {
+        isLive: true,
+        mode: 'PRODUCTION_SUPABASE',
+        url: config.url,
+        notice: `Connected to Supabase project at ${config.url}. PostgreSQL Row Level Security enforces all policies.`,
+      };
+    }
+    return {
+      isLive: false,
+      mode: 'OFFLINE_DEMO_SANDBOX',
+      url: config.url || '',
+      notice: config.isConfigured
+        ? 'Operating in Demo Sandbox Mode (configured via manual override).'
+        : 'Supabase credentials not configured in environment. The platform is running in offline local sandbox demo mode with sample data.',
+    };
   }
 
   public init(): void {

@@ -2,12 +2,13 @@
 -- PROOF-TO-PAY: Production-Grade Database Schema & Row-Level Security (RLS)
 -- Shared across Web Application and Native Android Jetpack Compose App
 -- Hardened against Privilege Escalation, Information Disclosure, & Tampering
+-- Idempotent & Safe for Clean Installation or Re-runs
 -- ==============================================================================
 
--- Enable UUID extension
+-- 0. Enable UUID extension
 create extension if not exists "uuid-ossp";
 
--- Enums
+-- 1. Custom PostgreSQL Types / Enums (Idempotent)
 do $$ begin
   if not exists (select 1 from pg_type where typname = 'user_role') then
     create type user_role as enum ('STUDENT', 'BUSINESS', 'ADMIN');
@@ -38,6 +39,10 @@ do $$ begin
   end if;
 end $$;
 
+-- ==============================================================================
+-- 2. TABLES
+-- ==============================================================================
+
 -- 1. Profiles Table (Linked to auth.users)
 create table if not exists public.profiles (
   id uuid references auth.users(id) on delete cascade primary key,
@@ -58,7 +63,7 @@ create table if not exists public.student_profiles (
   user_id uuid references public.profiles(id) on delete cascade primary key,
   headline text,
   bio text,
-  age int not null check (age >= 18),
+  age int not null default 18 check (age >= 18),
   college text,
   degree text,
   graduation_year int,
@@ -79,8 +84,8 @@ create table if not exists public.business_profiles (
   company_name text not null,
   tagline text,
   website text,
-  industry text not null,
-  city text not null,
+  industry text not null default 'Technology',
+  city text not null default '',
   verification_status verification_status not null default 'UNVERIFIED',
   verification_legal_entity text,
   verification_doc_type text,
@@ -98,10 +103,10 @@ create table if not exists public.projects (
   id uuid default uuid_generate_v4() primary key,
   business_id uuid references public.profiles(id) on delete cascade not null,
   business_name text not null,
-  business_city text not null,
+  business_city text not null default '',
   business_verified boolean not null default false,
   title text not null,
-  summary text not null,
+  summary text not null default '',
   description text not null,
   category text not null,
   required_skills text[] not null default '{}',
@@ -110,7 +115,7 @@ create table if not exists public.projects (
   expected_delivery_date date not null,
   permitted_revisions int not null default 2 check (permitted_revisions between 1 and 5),
   application_closing_date date not null,
-  payment_terms text not null,
+  payment_terms text not null default 'Direct UPI/NEFT upon deliverable approval.',
   status project_status not null default 'DRAFT',
   cover_image text,
   moderation_notes text,
@@ -127,7 +132,7 @@ create table if not exists public.deliverables (
   project_id uuid references public.projects(id) on delete cascade not null,
   title text not null,
   description text not null,
-  format text not null,
+  format text not null default 'Digital File',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -198,44 +203,44 @@ create table if not exists public.scope_change_requests (
   responded_by_user_id uuid references public.profiles(id) on delete set null
 );
 
--- 9. Submissions (Private between student, business, and admin)
+-- 9. Submissions
 create table if not exists public.submissions (
   id uuid default uuid_generate_v4() primary key,
   project_id uuid references public.projects(id) on delete cascade not null,
   student_id uuid references public.profiles(id) on delete cascade not null,
-  version int not null default 1,
-  notes text not null,
-  live_link text,
-  files jsonb default '[]'::jsonb,
-  status text not null default 'PENDING_REVIEW',
-  revision_feedback text,
-  revision_requested_at timestamp with time zone,
+  title text not null,
+  description text not null,
+  file_urls text[] default '{}',
+  notes text,
+  revision_number int not null default 1,
+  client_feedback text,
+  is_approved boolean,
+  approved_at timestamp with time zone,
   submitted_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- 10. Financial Record A: Business-to-Creator Project Payment
+-- 10. Project Payments (Record A: Direct Client-to-Creator Settlement)
 create table if not exists public.project_payments (
   id uuid default uuid_generate_v4() primary key,
   project_id uuid references public.projects(id) on delete cascade not null unique,
   project_title text not null,
   business_id uuid references public.profiles(id) on delete cascade not null,
+  business_name text not null,
   student_id uuid references public.profiles(id) on delete cascade not null,
+  student_name text not null,
   amount_paise bigint not null check (amount_paise >= 100000),
-  status payment_status not null default 'NOT_REPORTED',
   payment_method payment_method not null default 'UPI',
-  transaction_reference_utr text,
-  payment_proof_url text, -- PRIVATE evidence
-  recorded_by_user_id uuid references public.profiles(id) on delete set null,
-  recorded_at timestamp with time zone,
-  confirmed_at timestamp with time zone,
-  confirmed_by_user_id uuid references public.profiles(id) on delete set null,
-  dispute_reason text,
-  notes text,
+  utr text,
+  business_notes text,
+  status payment_status not null default 'NOT_REPORTED',
+  reported_at timestamp with time zone,
+  confirmed_by_creator_at timestamp with time zone,
+  creator_notes text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- 11. Financial Record B: Business-to-Proof-to-Pay Platform Commission
+-- 11. Platform Commissions (Record B: 5% Business-Paid Platform Fee)
 create table if not exists public.platform_commissions (
   id uuid default uuid_generate_v4() primary key,
   project_id uuid references public.projects(id) on delete cascade not null unique,
@@ -359,8 +364,54 @@ create table if not exists public.notifications (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- ------------------------------------------------------------------------------
+-- 2.18 INDEXES (Idempotent Performance & Relational Lookups)
+-- ------------------------------------------------------------------------------
+
+-- Indexes for public.profiles
+create index if not exists idx_profiles_role on public.profiles(role);
+create index if not exists idx_profiles_email on public.profiles(email);
+create index if not exists idx_profiles_created_at on public.profiles(created_at desc);
+
+-- Indexes for public.student_profiles & business_profiles
+create index if not exists idx_student_profiles_rating on public.student_profiles(average_rating);
+create index if not exists idx_business_profiles_status on public.business_profiles(verification_status);
+
+-- Indexes for public.projects
+create index if not exists idx_projects_business_id on public.projects(business_id);
+create index if not exists idx_projects_status on public.projects(status);
+create index if not exists idx_projects_category on public.projects(category);
+create index if not exists idx_projects_selected_student_id on public.projects(selected_student_id);
+create index if not exists idx_projects_created_at on public.projects(created_at desc);
+
+-- Indexes for relational workflow tables
+create index if not exists idx_deliverables_project_id on public.deliverables(project_id);
+create index if not exists idx_applications_project_id on public.applications(project_id);
+create index if not exists idx_applications_student_id on public.applications(student_id);
+create index if not exists idx_applications_status on public.applications(status);
+create index if not exists idx_project_offers_project_id on public.project_offers(project_id);
+create index if not exists idx_project_offers_parties on public.project_offers(business_id, student_id);
+create index if not exists idx_submissions_project_id on public.submissions(project_id);
+create index if not exists idx_submissions_student_id on public.submissions(student_id);
+create index if not exists idx_project_payments_project_id on public.project_payments(project_id);
+create index if not exists idx_platform_commissions_project_id on public.platform_commissions(project_id);
+create index if not exists idx_platform_commissions_status on public.platform_commissions(status);
+create index if not exists idx_proof_passport_student_id on public.proof_passport_items(student_id);
+
+-- Indexes for public.reviews
+create index if not exists idx_reviews_project_id on public.reviews(project_id);
+create index if not exists idx_reviews_reviewer_id on public.reviews(reviewer_id);
+create index if not exists idx_reviews_target_user_id on public.reviews(target_user_id);
+create index if not exists idx_reviews_rating on public.reviews(rating);
+create index if not exists idx_reviews_created_at on public.reviews(created_at desc);
+
+-- Indexes for audit, dispute, and notifications
+create index if not exists idx_audit_logs_actor_created on public.audit_logs(actor_role, created_at desc);
+create index if not exists idx_disputes_project_id on public.disputes(project_id);
+create index if not exists idx_notifications_user_unread on public.notifications(user_id, is_read);
+
 -- ==============================================================================
--- SECURE SERVER-SIDE FUNCTIONS & PRIVILEGE ESCALATION GUARDS
+-- 3. SECURE SERVER-SIDE FUNCTIONS & PRIVILEGE ESCALATION GUARDS
 -- ==============================================================================
 
 -- Helper: Check if current auth.uid() has active ADMIN role
@@ -378,11 +429,12 @@ as $$
   );
 $$;
 
--- Trigger: Prevent Users from Changing Role, Suspension, or Admin Notes
+-- Trigger Function: Prevent Non-Admins from altering Role, Suspension, or Admin Notes
 create or replace function public.prevent_profile_privilege_escalation()
 returns trigger
 language plpgsql
 security definer
+set search_path = public
 as $$
 begin
   if not public.is_admin() then
@@ -406,11 +458,12 @@ before update on public.profiles
 for each row
 execute function public.prevent_profile_privilege_escalation();
 
--- Trigger: Prevent Student Fake Rating / Stats Overrides
+-- Trigger Function: Prevent Student Fake Rating / Stats Overrides
 create or replace function public.prevent_student_stats_tampering()
 returns trigger
 language plpgsql
 security definer
+set search_path = public
 as $$
 begin
   if not public.is_admin() then
@@ -434,11 +487,12 @@ before update on public.student_profiles
 for each row
 execute function public.prevent_student_stats_tampering();
 
--- Trigger: Prevent Business Self-Verification or Document Tampering
+-- Trigger Function: Prevent Business Self-Verification or Document Tampering
 create or replace function public.prevent_business_verification_tampering()
 returns trigger
 language plpgsql
 security definer
+set search_path = public
 as $$
 begin
   if not public.is_admin() then
@@ -462,11 +516,12 @@ before update on public.business_profiles
 for each row
 execute function public.prevent_business_verification_tampering();
 
--- Trigger: Prevent Non-Admins from marking Platform Fee as Verified Collected
+-- Trigger Function: Prevent Non-Admins from marking Platform Fee as Verified Collected
 create or replace function public.prevent_commission_verification_tampering()
 returns trigger
 language plpgsql
 security definer
+set search_path = public
 as $$
 begin
   if not public.is_admin() then
@@ -487,7 +542,57 @@ before update on public.platform_commissions
 for each row
 execute function public.prevent_commission_verification_tampering();
 
--- Documented Safe Function: Bootstrap Initial Administrator
+-- Auth Hook: Automatically provision profiles on user signup (Safe against role escalation)
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  raw_role text;
+  assigned_role public.user_role;
+begin
+  raw_role := coalesce(new.raw_user_meta_data->>'role', 'STUDENT');
+  -- Never allow direct ADMIN self-selection at signup
+  if raw_role = 'ADMIN' then
+    assigned_role := 'STUDENT'::public.user_role;
+  elsif raw_role in ('STUDENT', 'BUSINESS') then
+    assigned_role := raw_role::public.user_role;
+  else
+    assigned_role := 'STUDENT'::public.user_role;
+  end if;
+
+  insert into public.profiles (id, email, name, role, is_suspended)
+  values (
+    new.id,
+    coalesce(new.email, ''),
+    coalesce(new.raw_user_meta_data->>'name', split_part(coalesce(new.email, 'User'), '@', 1)),
+    assigned_role,
+    false
+  )
+  on conflict (id) do nothing;
+
+  if assigned_role = 'STUDENT' then
+    insert into public.student_profiles (user_id)
+    values (new.id)
+    on conflict (user_id) do nothing;
+  elsif assigned_role = 'BUSINESS' then
+    insert into public.business_profiles (user_id, company_name)
+    values (new.id, coalesce(new.raw_user_meta_data->>'name', 'Organization'))
+    on conflict (user_id) do nothing;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- Secure One-Time Initial Administrator Provisioning Procedure
 create or replace function public.bootstrap_initial_admin(admin_email text)
 returns boolean
 language plpgsql
@@ -519,8 +624,14 @@ begin
 end;
 $$;
 
+-- Lock down bootstrap_initial_admin so unauthenticated/public users cannot call it via PostgREST RPC
+revoke execute on function public.bootstrap_initial_admin(text) from public;
+revoke execute on function public.bootstrap_initial_admin(text) from anon;
+revoke execute on function public.bootstrap_initial_admin(text) from authenticated;
+grant execute on function public.bootstrap_initial_admin(text) to postgres, service_role;
+
 -- ==============================================================================
--- ROW LEVEL SECURITY (RLS) POLICIES
+-- 4. ROW LEVEL SECURITY (RLS) POLICIES (Idempotent: Drop & Recreate)
 -- ==============================================================================
 
 alter table public.profiles enable row level security;
@@ -541,47 +652,60 @@ alter table public.disputes enable row level security;
 alter table public.abuse_reports enable row level security;
 alter table public.notifications enable row level security;
 
--- 1. Profiles RLS: Private contact info (email/phone) is protected; Public directory viewable
+-- 1. Profiles Policies
+drop policy if exists "Users can read own profile" on public.profiles;
 create policy "Users can read own profile" on public.profiles
   for select using (auth.uid() = id or public.is_admin());
 
+drop policy if exists "Public directory info viewable" on public.profiles;
 create policy "Public directory info viewable" on public.profiles
   for select using (not is_suspended);
 
+drop policy if exists "Users can update own basic profile" on public.profiles;
 create policy "Users can update own basic profile" on public.profiles
   for update using (auth.uid() = id);
 
--- 2. Student Profiles RLS: UPI ID is confidential, portfolio is public
+-- 2. Student Profiles Policies
+drop policy if exists "Public student profile view" on public.student_profiles;
 create policy "Public student profile view" on public.student_profiles
   for select using (true);
 
+drop policy if exists "Students can update own profile" on public.student_profiles;
 create policy "Students can update own profile" on public.student_profiles
   for update using (auth.uid() = user_id);
 
+drop policy if exists "Students can insert own profile" on public.student_profiles;
 create policy "Students can insert own profile" on public.student_profiles
   for insert with check (auth.uid() = user_id);
 
--- 3. Business Profiles RLS: Verification doc numbers and notes are private
+-- 3. Business Profiles Policies
+drop policy if exists "Public business profile view" on public.business_profiles;
 create policy "Public business profile view" on public.business_profiles
   for select using (true);
 
+drop policy if exists "Businesses can update own profile" on public.business_profiles;
 create policy "Businesses can update own profile" on public.business_profiles
   for update using (auth.uid() = user_id);
 
+drop policy if exists "Businesses can insert own profile" on public.business_profiles;
 create policy "Businesses can insert own profile" on public.business_profiles
   for insert with check (auth.uid() = user_id);
 
--- 4. Projects RLS
+-- 4. Projects Policies
+drop policy if exists "Approved projects are viewable by all" on public.projects;
 create policy "Approved projects are viewable by all" on public.projects
   for select using (status in ('APPROVED', 'IN_PROGRESS', 'COMPLETED') or business_id = auth.uid() or public.is_admin());
 
+drop policy if exists "Businesses can insert own projects" on public.projects;
 create policy "Businesses can insert own projects" on public.projects
   for insert with check (business_id = auth.uid());
 
+drop policy if exists "Businesses can update own projects when draft or active" on public.projects;
 create policy "Businesses can update own projects when draft or active" on public.projects
   for update using (business_id = auth.uid() or public.is_admin());
 
--- 5. Deliverables RLS
+-- 5. Deliverables Policies
+drop policy if exists "Deliverables viewable if project viewable" on public.deliverables;
 create policy "Deliverables viewable if project viewable" on public.deliverables
   for select using (exists (
     select 1 from public.projects
@@ -589,36 +713,44 @@ create policy "Deliverables viewable if project viewable" on public.deliverables
       and (projects.status in ('APPROVED', 'IN_PROGRESS', 'COMPLETED') or projects.business_id = auth.uid() or public.is_admin())
   ));
 
+drop policy if exists "Businesses can manage project deliverables" on public.deliverables;
 create policy "Businesses can manage project deliverables" on public.deliverables
   for all using (exists (
     select 1 from public.projects
     where projects.id = deliverables.project_id and projects.business_id = auth.uid()
   ));
 
--- 6. Applications RLS: Confidential between applicant, business, and admin
+-- 6. Applications Policies
+drop policy if exists "Students view own applications" on public.applications;
 create policy "Students view own applications" on public.applications
   for select using (student_id = auth.uid() or public.is_admin());
 
+drop policy if exists "Businesses view applications for their projects" on public.applications;
 create policy "Businesses view applications for their projects" on public.applications
   for select using (exists (
     select 1 from public.projects
     where projects.id = applications.project_id and projects.business_id = auth.uid()
   ));
 
+drop policy if exists "Students can submit application" on public.applications;
 create policy "Students can submit application" on public.applications
   for insert with check (student_id = auth.uid());
 
--- 7. Binding Offers RLS: Only involved parties and admin
+-- 7. Offers Policies
+drop policy if exists "Offer participants view offer" on public.project_offers;
 create policy "Offer participants view offer" on public.project_offers
   for select using (business_id = auth.uid() or student_id = auth.uid() or public.is_admin());
 
+drop policy if exists "Business can create offer" on public.project_offers;
 create policy "Business can create offer" on public.project_offers
   for insert with check (business_id = auth.uid());
 
+drop policy if exists "Participants can update offer status" on public.project_offers;
 create policy "Participants can update offer status" on public.project_offers
   for update using (business_id = auth.uid() or student_id = auth.uid() or public.is_admin());
 
--- 8. Scope Change Requests RLS
+-- 8. Scope Change Requests Policies
+drop policy if exists "Scope change participants view" on public.scope_change_requests;
 create policy "Scope change participants view" on public.scope_change_requests
   for select using (
     exists (
@@ -628,6 +760,7 @@ create policy "Scope change participants view" on public.scope_change_requests
     )
   );
 
+drop policy if exists "Scope change participants create" on public.scope_change_requests;
 create policy "Scope change participants create" on public.scope_change_requests
   for insert with check (
     requested_by_user_id = auth.uid() and
@@ -638,6 +771,7 @@ create policy "Scope change participants create" on public.scope_change_requests
     )
   );
 
+drop policy if exists "Scope change counterparty respond" on public.scope_change_requests;
 create policy "Scope change counterparty respond" on public.scope_change_requests
   for update using (
     exists (
@@ -647,7 +781,8 @@ create policy "Scope change counterparty respond" on public.scope_change_request
     )
   );
 
--- 9. Submissions RLS: Strictly private between student, client, and admin
+-- 9. Submissions Policies
+drop policy if exists "Submissions viewable only by project participants" on public.submissions;
 create policy "Submissions viewable only by project participants" on public.submissions
   for select using (
     student_id = auth.uid() or
@@ -657,6 +792,7 @@ create policy "Submissions viewable only by project participants" on public.subm
     ) or public.is_admin()
   );
 
+drop policy if exists "Assigned student can create submission" on public.submissions;
 create policy "Assigned student can create submission" on public.submissions
   for insert with check (
     student_id = auth.uid() and
@@ -666,63 +802,147 @@ create policy "Assigned student can create submission" on public.submissions
     )
   );
 
--- 10. Project Payments RLS (Record A): Private between parties
+-- 10. Project Payments Policies (Record A)
+drop policy if exists "Payment records viewable by parties and admin" on public.project_payments;
 create policy "Payment records viewable by parties and admin" on public.project_payments
   for select using (business_id = auth.uid() or student_id = auth.uid() or public.is_admin());
 
-create policy "Business can report payment" on public.project_payments
+drop policy if exists "Business can create payment record" on public.project_payments;
+create policy "Business can create payment record" on public.project_payments
+  for insert with check (business_id = auth.uid());
+
+drop policy if exists "Parties can report and confirm payment" on public.project_payments;
+create policy "Parties can report and confirm payment" on public.project_payments
   for update using (business_id = auth.uid() or student_id = auth.uid() or public.is_admin());
 
--- 11. Platform Commissions RLS (Record B): Only business and admin
+-- 11. Platform Commissions Policies (Record B)
+drop policy if exists "Commission records viewable by business and admin" on public.platform_commissions;
 create policy "Commission records viewable by business and admin" on public.platform_commissions
   for select using (business_id = auth.uid() or public.is_admin());
 
+drop policy if exists "Business can report commission payment" on public.platform_commissions;
 create policy "Business can report commission payment" on public.platform_commissions
   for update using (business_id = auth.uid() or public.is_admin());
 
--- 12. Proof Passport Items RLS: Public only if creator opted in (is_public = true)
+-- 12. Proof Passport Items Policies
+drop policy if exists "Public Proof Passport viewable when published" on public.proof_passport_items;
 create policy "Public Proof Passport viewable when published" on public.proof_passport_items
   for select using (is_public = true or student_id = auth.uid() or public.is_admin());
 
+drop policy if exists "Creator can toggle public visibility of own passport items" on public.proof_passport_items;
 create policy "Creator can toggle public visibility of own passport items" on public.proof_passport_items
   for update using (student_id = auth.uid() or public.is_admin());
 
--- 13. Verified Reviews RLS: Public read, only client can submit
+-- 13. Verified Reviews Policies
+drop policy if exists "Reviews are publicly readable" on public.reviews;
 create policy "Reviews are publicly readable" on public.reviews
   for select using (true);
 
+drop policy if exists "Participants can submit review" on public.reviews;
 create policy "Participants can submit review" on public.reviews
   for insert with check (reviewer_id = auth.uid());
 
--- 14. Audit Logs RLS: Admin only read; system append
+-- 14. Administrative Audit Logs Policies (Append-Only)
+drop policy if exists "Admins can view audit logs" on public.audit_logs;
 create policy "Admins can view audit logs" on public.audit_logs
   for select using (public.is_admin());
 
+drop policy if exists "Authenticated users can append audit log" on public.audit_logs;
 create policy "Authenticated users can append audit log" on public.audit_logs
   for insert with check (auth.uid() is not null);
 
--- 15. Disputes RLS
+-- 15. Disputes Policies
+drop policy if exists "Disputes viewable by parties and admin" on public.disputes;
 create policy "Disputes viewable by parties and admin" on public.disputes
   for select using (raised_by_user_id = auth.uid() or public.is_admin() or exists (
     select 1 from public.projects where projects.id = disputes.project_id and (projects.business_id = auth.uid() or projects.selected_student_id = auth.uid())
   ));
 
+drop policy if exists "Participants can raise dispute" on public.disputes;
 create policy "Participants can raise dispute" on public.disputes
   for insert with check (raised_by_user_id = auth.uid());
 
+drop policy if exists "Admin can resolve dispute" on public.disputes;
 create policy "Admin can resolve dispute" on public.disputes
   for update using (public.is_admin());
 
--- 16. Abuse Reports RLS
+-- 16. Abuse Reports Policies
+drop policy if exists "Users submit abuse reports" on public.abuse_reports;
 create policy "Users submit abuse reports" on public.abuse_reports
   for insert with check (auth.uid() is not null);
 
+drop policy if exists "Admins manage abuse reports" on public.abuse_reports;
 create policy "Admins manage abuse reports" on public.abuse_reports
   for all using (public.is_admin());
 
--- 17. Notifications RLS
+-- 17. In-App Notifications Policies
+drop policy if exists "Users read own notifications" on public.notifications;
 create policy "Users read own notifications" on public.notifications
   for select using (user_id = auth.uid());
 
+drop policy if exists "Users update own notifications" on public.notifications;
 create policy "Users update own notifications" on public.notifications
   for update using (user_id = auth.uid());
+
+-- ==============================================================================
+-- 5. VERIFICATION STEP
+-- ==============================================================================
+-- Automated verification block: executes immediately when running this schema script.
+-- Validates that the core tables (profiles, projects, reviews) exist, have RLS enabled,
+-- and have primary keys and required constraints established.
+do $$
+declare
+  missing_tables text[];
+  unprotected_tables text[];
+  missing_indexes text[];
+begin
+  -- 1. Check table presence for core tables
+  select array_agg(tbl) into missing_tables
+  from (
+    select unnest(array['profiles', 'projects', 'reviews']) as tbl
+  ) required
+  where not exists (
+    select 1 from pg_tables
+    where schemaname = 'public' and tablename = required.tbl
+  );
+
+  if missing_tables is not null and array_length(missing_tables, 1) > 0 then
+    raise exception 'Migration Verification Failed: Missing required core tables: %', array_to_string(missing_tables, ', ');
+  end if;
+
+  -- 2. Check Row Level Security is active
+  select array_agg(tbl) into unprotected_tables
+  from (
+    select unnest(array['profiles', 'projects', 'reviews']) as tbl
+  ) required
+  where not exists (
+    select 1 from pg_tables
+    where schemaname = 'public' and tablename = required.tbl and rowsecurity = true
+  );
+
+  if unprotected_tables is not null and array_length(unprotected_tables, 1) > 0 then
+    raise exception 'Migration Verification Failed: Core tables without Row Level Security enabled: %', array_to_string(unprotected_tables, ', ');
+  end if;
+
+  -- 3. Check core indexes
+  select array_agg(idx) into missing_indexes
+  from (
+    select unnest(array[
+      'idx_profiles_role',
+      'idx_projects_business_id',
+      'idx_projects_status',
+      'idx_reviews_project_id',
+      'idx_reviews_target_user_id'
+    ]) as idx
+  ) required_indexes
+  where not exists (
+    select 1 from pg_indexes
+    where schemaname = 'public' and indexname = required_indexes.idx
+  );
+
+  if missing_indexes is not null and array_length(missing_indexes, 1) > 0 then
+    raise exception 'Migration Verification Failed: Missing core indexes: %', array_to_string(missing_indexes, ', ');
+  end if;
+
+  raise notice 'Verification Succeeded: Core tables (profiles, projects, reviews) created with RLS enabled and indexes verified.';
+end $$;

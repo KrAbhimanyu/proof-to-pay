@@ -530,4 +530,183 @@ describe('PROOF-TO-PAY: Security, Authorization & Monetary Integrity Tests', () 
       expect(eventTypes).toContain('PROJECT_PAYMENT_CONFIRMED');
     });
   });
+
+  // --- Creator Portfolio UI: Privacy, Authorization, Visibility & Management ---
+  describe('Proof-to-Pay Creator Portfolio UI: Privacy, Visibility & Authorization', () => {
+    it('allows creators to hide eligible work without altering underlying project history', () => {
+      const student1 = marketplaceStore.getUsers().find((u) => u.id === 'student-1')!;
+      const allItemsBefore = marketplaceStore.getProofPassportItems('student-1', false);
+      expect(allItemsBefore.length).toBeGreaterThan(0);
+
+      const target = allItemsBefore[0];
+      const associatedProjectBefore = marketplaceStore.getProject(target.projectId);
+      expect(associatedProjectBefore?.status).toBe('COMPLETED');
+
+      // Creator hides item from public passport
+      marketplaceStore.toggleProofPassportVisibility(student1, target.id, false);
+
+      // Public visitors (onlyPublic = true) cannot see it
+      const publicItems = marketplaceStore.getProofPassportItems('student-1', true);
+      expect(publicItems.some((i) => i.id === target.id)).toBe(false);
+
+      // Creator still sees it in private manager
+      const ownerItems = marketplaceStore.getProofPassportItems('student-1', false);
+      const hiddenItem = ownerItems.find((i) => i.id === target.id);
+      expect(hiddenItem?.isPublic).toBe(false);
+
+      // Underlying project status remains COMPLETED
+      const associatedProjectAfter = marketplaceStore.getProject(target.projectId);
+      expect(associatedProjectAfter?.status).toBe('COMPLETED');
+    });
+
+    it('only confirmed completed projects or dispute resolutions qualify for proof passport', () => {
+      // In-progress projects like proj-2 must not be in proof passport
+      const passportItems = marketplaceStore.getProofPassportItems();
+      const inProgressPassportItem = passportItems.find((i) => i.projectId === 'proj-2');
+      expect(inProgressPassportItem).toBeUndefined();
+
+      // All existing items must have a verifiable source
+      passportItems.forEach((item) => {
+        expect(['BUSINESS_APPROVAL', 'DISPUTE_RESOLUTION']).toContain(item.completionSource);
+        const proj = marketplaceStore.getProject(item.projectId);
+        if (proj) {
+          expect(proj.status).toBe('COMPLETED');
+        }
+      });
+    });
+
+    it('calculates ratings dynamically from authentic reviews without fabricating missing ratings', () => {
+      // student-1 has real review
+      const revsStu1 = marketplaceStore.getReviews().filter((r) => r.targetUserId === 'student-1');
+      expect(revsStu1.length).toBeGreaterThan(0);
+      const calcRating1 = revsStu1.reduce((sum, r) => sum + r.rating, 0) / revsStu1.length;
+      expect(calcRating1).toBe(5);
+
+      // student-2 has 0 reviews in store
+      const revsStu2 = marketplaceStore.getReviews().filter((r) => r.targetUserId === 'student-2');
+      expect(revsStu2.length).toBe(0);
+      const calcRating2 = revsStu2.length > 0 ? revsStu2.reduce((sum, r) => sum + r.rating, 0) / revsStu2.length : null;
+      expect(calcRating2).toBeNull();
+    });
+
+    it('creator can edit permitted profile fields but non-owners are rejected', () => {
+      const student1 = marketplaceStore.getUsers().find((u) => u.id === 'student-1')!;
+      const student2 = marketplaceStore.getUsers().find((u) => u.id === 'student-2')!;
+
+      // student-1 edits their own profile
+      const updated = marketplaceStore.updateCreatorPortfolio(student1, 'student-1', {
+        headline: 'Senior Full-Stack Engineer · Next.js & React Native',
+        availability: 'BUSY',
+        skills: ['React', 'TypeScript', 'Tailwind', 'Next.js', 'GraphQL'],
+        college: 'DTU Delhi',
+      });
+
+      expect(updated.headline).toBe('Senior Full-Stack Engineer · Next.js & React Native');
+      expect(updated.availability).toBe('BUSY');
+      expect(updated.skills).toContain('GraphQL');
+
+      // student-2 attempting to edit student-1's profile is rejected
+      expect(() => {
+        marketplaceStore.updateCreatorPortfolio(student2, 'student-1', {
+          headline: 'Hacked Headline',
+        });
+      }).toThrow(/Unauthorized/i);
+    });
+
+    it('prevents privilege escalation: cannot alter role, earnings or completed counts via portfolio edit', () => {
+      const student1 = marketplaceStore.getUsers().find((u) => u.id === 'student-1')!;
+      const profileBefore = marketplaceStore.getStudentProfile('student-1')!;
+      const originalEarned = profileBefore.totalEarnedINR;
+      const originalCompleted = profileBefore.completedProjectsCount;
+
+      // Attempt to tamper with earnings or project count via updateCreatorPortfolio
+      const tampered = marketplaceStore.updateCreatorPortfolio(student1, 'student-1', {
+        headline: 'Legitimate headline update',
+        ...({ totalEarnedINR: 99999999, completedProjectsCount: 100, role: 'ADMIN' } as any)
+      });
+
+      // Whitelisted fields update, non-permitted fields remain protected
+      expect(tampered.headline).toBe('Legitimate headline update');
+      expect(tampered.totalEarnedINR).toBe(originalEarned);
+      expect(tampered.completedProjectsCount).toBe(originalCompleted);
+      expect((tampered as any).role).toBeUndefined();
+    });
+
+    it('sanitizes public display and prevents private PII / payment data exposure', () => {
+      const publicItems = marketplaceStore.getProofPassportItems('student-1', true);
+      publicItems.forEach((item) => {
+        // Must contain sanitized summary
+        expect(item.sanitizedSummary).toBeDefined();
+        // Raw internal files, UTRs, and payment proofs must not be present on public item
+        expect((item as any).files).toBeUndefined();
+        expect((item as any).utrReference).toBeUndefined();
+        expect((item as any).paymentProofUrl).toBeUndefined();
+        expect((item as any).upiId).toBeUndefined();
+        expect((item as any).phone).toBeUndefined();
+      });
+    });
+
+    // --- Social Media Profiles & Skills Management ---
+    it('allows creators to link and manage their GitHub, LinkedIn, and Behance profiles', () => {
+      const student1 = marketplaceStore.getUsers().find((u) => u.id === 'student-1')!;
+
+      // Link GitHub, LinkedIn, and Behance
+      const updated = marketplaceStore.updateCreatorPortfolio(student1, 'student-1', {
+        socialLinks: [
+          { platform: 'github', url: 'https://github.com/aarav-sharma' },
+          { platform: 'linkedin', url: 'https://linkedin.com/in/aarav-sharma-dev' },
+          { platform: 'behance', url: 'https://behance.net/aaravsharma' },
+        ],
+      });
+
+      expect(updated.socialLinks).toBeDefined();
+      expect(updated.socialLinks?.length).toBe(3);
+
+      const gh = updated.socialLinks?.find((s) => s.platform === 'github');
+      const li = updated.socialLinks?.find((s) => s.platform === 'linkedin');
+      const be = updated.socialLinks?.find((s) => s.platform === 'behance');
+
+      expect(gh?.url).toBe('https://github.com/aarav-sharma');
+      expect(li?.url).toBe('https://linkedin.com/in/aarav-sharma-dev');
+      expect(be?.url).toBe('https://behance.net/aaravsharma');
+
+      // Verify persistence in store
+      const retrieved = marketplaceStore.getStudentProfile('student-1')!;
+      expect(retrieved.socialLinks).toEqual(updated.socialLinks);
+    });
+
+    it('rejects unauthorized users from editing or tampering with another creator\'s social profiles', () => {
+      const student2 = marketplaceStore.getUsers().find((u) => u.id === 'student-2')!;
+
+      expect(() => {
+        marketplaceStore.updateCreatorPortfolio(student2, 'student-1', {
+          socialLinks: [{ platform: 'github', url: 'https://github.com/attacker' }],
+        });
+      }).toThrow(/Unauthorized/i);
+    });
+
+    it('allows creators to add, update, and remove permitted technical skills without duplicates', () => {
+      const student1 = marketplaceStore.getUsers().find((u) => u.id === 'student-1')!;
+      const profileBefore = marketplaceStore.getStudentProfile('student-1')!;
+      const initialSkills = [...profileBefore.skills];
+
+      // Add new skill
+      const withNewSkill = Array.from(new Set([...initialSkills, 'Docker', 'GraphQL']));
+      const updated = marketplaceStore.updateCreatorPortfolio(student1, 'student-1', {
+        skills: withNewSkill,
+      });
+
+      expect(updated.skills).toContain('Docker');
+      expect(updated.skills).toContain('GraphQL');
+
+      // Remove a skill
+      const withoutDocker = updated.skills.filter((s) => s !== 'Docker');
+      const updatedAfterRemoval = marketplaceStore.updateCreatorPortfolio(student1, 'student-1', {
+        skills: withoutDocker,
+      });
+
+      expect(updatedAfterRemoval.skills).not.toContain('Docker');
+      expect(updatedAfterRemoval.skills).toContain('GraphQL');
+    });
+  });
 });

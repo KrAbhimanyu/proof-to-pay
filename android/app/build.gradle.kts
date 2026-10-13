@@ -20,9 +20,36 @@ android {
             useSupportLibrary = true
         }
 
-        // Supabase Public Client Credentials (Configured safely from build/environment)
-        buildConfigField("String", "SUPABASE_URL", "\"https://your-project.supabase.co\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key\"")
+        // Supabase Public Client Credentials
+        // Dynamically resolved from Gradle project properties (-PSUPABASE_URL=...),
+        // local.properties, gradle.properties, or system environment variables (CI/CD or .env).
+        // NEVER embed service-role keys or secret tokens.
+        val localProperties = java.util.Properties().apply {
+            val localPropsFile = rootProject.file("local.properties")
+            if (localPropsFile.exists()) {
+                localPropsFile.inputStream().use { load(it) }
+            }
+        }
+
+        val resolvedSupabaseUrl: String = (project.findProperty("SUPABASE_URL") as? String)
+            ?: (localProperties.getProperty("SUPABASE_URL") as? String)
+            ?: System.getenv("SUPABASE_URL")
+            ?: System.getenv("VITE_SUPABASE_URL")
+            ?: ""
+
+        val resolvedPublishableKey: String = (project.findProperty("SUPABASE_PUBLISHABLE_KEY") as? String)
+            ?: (project.findProperty("SUPABASE_ANON_KEY") as? String)
+            ?: (localProperties.getProperty("SUPABASE_PUBLISHABLE_KEY") as? String)
+            ?: (localProperties.getProperty("SUPABASE_ANON_KEY") as? String)
+            ?: System.getenv("SUPABASE_PUBLISHABLE_KEY")
+            ?: System.getenv("VITE_SUPABASE_PUBLISHABLE_KEY")
+            ?: System.getenv("SUPABASE_ANON_KEY")
+            ?: System.getenv("VITE_SUPABASE_ANON_KEY")
+            ?: ""
+
+        buildConfigField("String", "SUPABASE_URL", "\"$resolvedSupabaseUrl\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"$resolvedPublishableKey\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$resolvedPublishableKey\"")
     }
 
     buildTypes {

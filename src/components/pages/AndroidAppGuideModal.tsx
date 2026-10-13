@@ -19,15 +19,23 @@ import { getSupabaseConfig, saveSupabaseConfig } from '../../lib/supabaseClient'
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  initialTab?: 'compose' | 'supabase' | 'install' | 'code';
 }
 
-export const AndroidAppGuideModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'compose' | 'supabase' | 'install' | 'code'>('compose');
+export const AndroidAppGuideModal: React.FC<Props> = ({ isOpen, onClose, initialTab = 'compose' }) => {
+  const [activeTab, setActiveTab] = useState<'compose' | 'supabase' | 'install' | 'code'>(initialTab);
+
+  // Sync tab when initialTab changes
+  React.useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, isOpen]);
 
   // Supabase connection form state
   const currentConfig = getSupabaseConfig();
   const [supabaseUrl, setSupabaseUrl] = useState(currentConfig.url);
-  const [supabaseKey, setSupabaseKey] = useState(currentConfig.anonKey);
+  const [supabaseKey, setSupabaseKey] = useState(currentConfig.publishableKey || currentConfig.anonKey);
   const [isSaved, setIsSaved] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
 
@@ -218,7 +226,7 @@ export const AndroidAppGuideModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Supabase Public Anon Key
+                    Supabase Public / Publishable Key (VITE_SUPABASE_PUBLISHABLE_KEY)
                   </label>
                   <input
                     type="password"

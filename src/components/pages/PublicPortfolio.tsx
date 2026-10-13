@@ -41,6 +41,58 @@ import {
   Info
 } from 'lucide-react';
 
+// Official Brand Icons for Social Profiles
+export const GithubIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+  </svg>
+);
+
+export const LinkedinIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 8.76a1.64 1.64 0 1 0 0-3.28 1.64 1.64 0 0 0 0 3.28M7.85 18.5V10.13H5.06V18.5h2.79z" />
+  </svg>
+);
+
+export const BehanceIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M22 7h-7v-2h7v2zm1.726 10c-.442 1.297-2.029 3-4.971 3-3.457 0-5.755-2.5-5.755-6s2.298-6 5.755-6c3.456 0 5.404 2.457 5.244 6h-8c0 1.688 1.157 3.5 3.001 3.5 1.558 0 2.502-.857 2.726-1.5h2zm-2.001-4.5c-.092-1.258-1.002-2.5-3.001-2.5s-2.85 1.242-2.999 2.5h6zm-13.725-7.5h-8v16h8.215c3.541 0 5.785-1.957 5.785-5.215 0-2.033-1.077-3.666-2.857-4.414 1.442-.693 2.357-2.13 2.357-3.871 0-2.812-2.039-4.5-5.5-4.5zm-5 6.5v-3.5h4.5c1.479 0 2.5.764 2.5 1.75s-1.021 1.75-2.5 1.75h-4.5zm0 6.5v-4h4.8c1.611 0 2.7.834 2.7 2s-1.089 2-2.7 2h-4.8z" />
+  </svg>
+);
+
+// Normalize user input into valid web URLs
+export const normalizeSocialUrl = (platform: string, input: string): string => {
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  const clean = trimmed.replace(/^@/, '');
+  if (platform.toLowerCase() === 'github') return `https://github.com/${clean}`;
+  if (platform.toLowerCase() === 'linkedin') {
+    return clean.includes('linkedin.com') ? `https://${clean}` : `https://linkedin.com/in/${clean}`;
+  }
+  if (platform.toLowerCase() === 'behance') {
+    return clean.includes('behance.net') ? `https://${clean}` : `https://behance.net/${clean}`;
+  }
+  return `https://${clean}`;
+};
+
+// Extract readable handle or slug for clean badge labels
+export const extractSocialHandle = (url: string, platform: string): string => {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split('/').filter(Boolean);
+    if (platform.toLowerCase() === 'linkedin' && parts[0] === 'in' && parts[1]) {
+      return `@${parts[1]}`;
+    }
+    if (parts.length > 0 && parts[parts.length - 1]) {
+      return `@${parts[parts.length - 1]}`;
+    }
+    return url.replace(/^https?:\/\//, '');
+  } catch {
+    return url.replace(/^https?:\/\//, '');
+  }
+};
+
 interface Props {
   slug: string;
   currentUser?: User | null;
@@ -82,6 +134,12 @@ export const PublicPortfolio: React.FC<Props> = ({
   const [editAvailability, setEditAvailability] = useState<'AVAILABLE' | 'BUSY' | 'UNAVAILABLE'>('AVAILABLE');
   const [editCoverImage, setEditCoverImage] = useState('');
   const [editExpLevel, setEditExpLevel] = useState<'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'>('INTERMEDIATE');
+
+  // Social Media Profiles State
+  const [editGithub, setEditGithub] = useState('');
+  const [editLinkedin, setEditLinkedin] = useState('');
+  const [editBehance, setEditBehance] = useState('');
+  const [quickSkillInput, setQuickSkillInput] = useState('');
 
   // Add Sample Form State
   const [sampleTitle, setSampleTitle] = useState('');
@@ -163,6 +221,27 @@ export const PublicPortfolio: React.FC<Props> = ({
     return Array.from(set);
   }, [completedProjects, allPassportItems]);
 
+  // Social media links
+  const githubLink = useMemo(
+    () => profile?.socialLinks?.find((s) => s.platform.toLowerCase() === 'github'),
+    [profile?.socialLinks, refreshCounter]
+  );
+  const linkedinLink = useMemo(
+    () => profile?.socialLinks?.find((s) => s.platform.toLowerCase() === 'linkedin'),
+    [profile?.socialLinks, refreshCounter]
+  );
+  const behanceLink = useMemo(
+    () => profile?.socialLinks?.find((s) => s.platform.toLowerCase() === 'behance'),
+    [profile?.socialLinks, refreshCounter]
+  );
+  const otherSocialLinks = useMemo(
+    () => (profile?.socialLinks || []).filter(
+      (s) => !['github', 'linkedin', 'behance'].includes(s.platform.toLowerCase())
+    ),
+    [profile?.socialLinks, refreshCounter]
+  );
+  const hasAnySocial = Boolean(githubLink || linkedinLink || behanceLink || otherSocialLinks.length > 0);
+
   // Filtered Proof Passport Items
   const filteredPassportItems = useMemo(() => {
     return publicPassportItems.filter((item) => {
@@ -232,6 +311,15 @@ export const PublicPortfolio: React.FC<Props> = ({
     setEditAvailability(profile.availability || 'AVAILABLE');
     setEditCoverImage(profile.coverImageUrl || '');
     setEditExpLevel(profile.experienceLevel || 'INTERMEDIATE');
+
+    // Extract social links
+    const gh = profile.socialLinks?.find((s) => s.platform.toLowerCase() === 'github')?.url || '';
+    const li = profile.socialLinks?.find((s) => s.platform.toLowerCase() === 'linkedin')?.url || '';
+    const be = profile.socialLinks?.find((s) => s.platform.toLowerCase() === 'behance')?.url || '';
+    setEditGithub(gh);
+    setEditLinkedin(li);
+    setEditBehance(be);
+
     setShowEditProfileModal(true);
   };
 
@@ -241,6 +329,23 @@ export const PublicPortfolio: React.FC<Props> = ({
     if (!currentUser || !isOwner) return;
 
     try {
+      const newSocialLinks: { platform: string; url: string }[] = [];
+      if (editGithub.trim()) {
+        newSocialLinks.push({ platform: 'github', url: normalizeSocialUrl('github', editGithub) });
+      }
+      if (editLinkedin.trim()) {
+        newSocialLinks.push({ platform: 'linkedin', url: normalizeSocialUrl('linkedin', editLinkedin) });
+      }
+      if (editBehance.trim()) {
+        newSocialLinks.push({ platform: 'behance', url: normalizeSocialUrl('behance', editBehance) });
+      }
+
+      // Preserve any other platforms
+      const otherPlatforms = (profile?.socialLinks || []).filter(
+        (s) => !['github', 'linkedin', 'behance'].includes(s.platform.toLowerCase())
+      );
+      const combinedSocialLinks = [...newSocialLinks, ...otherPlatforms];
+
       marketplaceStore.updateCreatorPortfolio(currentUser, studentUser.id, {
         headline: editHeadline,
         bio: editBio,
@@ -251,12 +356,44 @@ export const PublicPortfolio: React.FC<Props> = ({
         experienceLevel: editExpLevel,
         availability: editAvailability,
         coverImageUrl: editCoverImage.trim() || undefined,
+        socialLinks: combinedSocialLinks,
       });
       setShowEditProfileModal(false);
       setRefreshCounter((c) => c + 1);
-      triggerToast('Profile & presentation updated successfully!');
+      triggerToast('Profile & social media links updated successfully!');
     } catch (err: any) {
       alert(err.message || 'Failed to update profile');
+    }
+  };
+
+  // Direct In-Place Skill Management (Skills Tab)
+  const handleAddSkillDirectly = (skillName: string) => {
+    const s = skillName.trim();
+    if (!s || !isOwner || !currentUser || !profile) return;
+    if (profile.skills.some((sk) => sk.toLowerCase() === s.toLowerCase())) {
+      triggerToast(`Skill "${s}" is already in your stack`);
+      return;
+    }
+    const updated = [...profile.skills, s];
+    try {
+      marketplaceStore.updateCreatorPortfolio(currentUser, studentUser.id, { skills: updated });
+      setQuickSkillInput('');
+      setRefreshCounter((c) => c + 1);
+      triggerToast(`Added ${s} to your technical stack!`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to add skill');
+    }
+  };
+
+  const handleRemoveSkillDirectly = (skillName: string) => {
+    if (!isOwner || !currentUser || !profile) return;
+    const updated = profile.skills.filter((sk) => sk !== skillName);
+    try {
+      marketplaceStore.updateCreatorPortfolio(currentUser, studentUser.id, { skills: updated });
+      setRefreshCounter((c) => c + 1);
+      triggerToast(`Removed ${skillName} from your technical stack`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove skill');
     }
   };
 
@@ -621,6 +758,98 @@ export const PublicPortfolio: React.FC<Props> = ({
                 {profile.bio}
               </p>
             )}
+
+            {/* Social Media & External Profiles Section */}
+            <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mr-1">
+                  <FolderGit2 className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Online Profiles:</span>
+                </span>
+
+                {githubLink && (
+                  <a
+                    href={githubLink.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-semibold shadow-2xs transition group"
+                    title={`View GitHub: ${githubLink.url}`}
+                  >
+                    <GithubIcon className="w-3.5 h-3.5 text-slate-300 group-hover:text-white shrink-0" />
+                    <span>GitHub</span>
+                    <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
+                      {extractSocialHandle(githubLink.url, 'github')}
+                    </span>
+                    <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-white shrink-0 ml-0.5" />
+                  </a>
+                )}
+
+                {linkedinLink && (
+                  <a
+                    href={linkedinLink.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0A66C2] hover:bg-[#084e96] text-white text-xs font-semibold shadow-2xs transition group"
+                    title={`View LinkedIn: ${linkedinLink.url}`}
+                  >
+                    <LinkedinIcon className="w-3.5 h-3.5 text-white shrink-0" />
+                    <span>LinkedIn</span>
+                    <span className="text-[10px] text-blue-100 hidden sm:inline">
+                      {extractSocialHandle(linkedinLink.url, 'linkedin')}
+                    </span>
+                    <ExternalLink className="w-3 h-3 text-blue-200 group-hover:text-white shrink-0 ml-0.5" />
+                  </a>
+                )}
+
+                {behanceLink && (
+                  <a
+                    href={behanceLink.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0057FF] hover:bg-[#0047d4] text-white text-xs font-semibold shadow-2xs transition group"
+                    title={`View Behance: ${behanceLink.url}`}
+                  >
+                    <BehanceIcon className="w-3.5 h-3.5 text-white shrink-0" />
+                    <span>Behance</span>
+                    <span className="text-[10px] text-blue-100 hidden sm:inline">
+                      {extractSocialHandle(behanceLink.url, 'behance')}
+                    </span>
+                    <ExternalLink className="w-3 h-3 text-blue-200 group-hover:text-white shrink-0 ml-0.5" />
+                  </a>
+                )}
+
+                {otherSocialLinks.map((ol, idx) => (
+                  <a
+                    key={idx}
+                    href={ol.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold shadow-2xs transition group"
+                  >
+                    <ExternalLink className="w-3 h-3 text-slate-500" />
+                    <span className="capitalize">{ol.platform}</span>
+                  </a>
+                ))}
+
+                {!hasAnySocial && (
+                  <span className="text-xs text-slate-400 italic">
+                    {isOwner
+                      ? 'No external profiles linked yet. Add GitHub, LinkedIn, or Behance to highlight your code and designs.'
+                      : 'Creator has not linked external social profiles yet.'}
+                  </span>
+                )}
+              </div>
+
+              {isOwner && (
+                <button
+                  onClick={handleOpenEditProfile}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition self-start sm:self-auto shrink-0"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>{hasAnySocial ? 'Manage Social Profiles' : '+ Link GitHub, LinkedIn, or Behance'}</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1164,37 +1393,86 @@ export const PublicPortfolio: React.FC<Props> = ({
               )}
             </div>
 
-            {/* General Technical Stack */}
+            {/* General Technical Stack / Self-Declared Skills */}
             <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    Demonstrated Technical Stack ({profile?.skills.length || 0})
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-amber-500" />
+                    <span>Demonstrated Technical Stack ({profile?.skills.length || 0})</span>
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Core languages, frameworks, design systems, and developer workflows.
+                    Self-declared languages, frameworks, and design proficiencies. Deliverable-verified skills are highlighted above.
                   </p>
                 </div>
                 {isOwner && (
                   <button
                     onClick={handleOpenEditProfile}
-                    className="text-xs text-indigo-600 font-semibold hover:underline flex items-center gap-1"
+                    className="text-xs text-indigo-600 font-semibold hover:underline flex items-center gap-1 self-start sm:self-auto"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
-                    <span>Manage Skills</span>
+                    <span>Full Profile Editor</span>
                   </button>
                 )}
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-2">
-                {profile?.skills.map((s) => (
-                  <span
-                    key={s}
-                    className="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold"
+              {/* In-Place Quick Add for Creator */}
+              {isOwner && (
+                <div className="flex gap-2 pt-1">
+                  <input
+                    type="text"
+                    value={quickSkillInput}
+                    onChange={(e) => setQuickSkillInput(e.target.value)}
+                    placeholder="Add a new skill (e.g. Tailwind CSS, Next.js, Redux)..."
+                    className="flex-1 max-w-md px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 transition"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddSkillDirectly(quickSkillInput);
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => handleAddSkillDirectly(quickSkillInput)}
+                    className="px-4 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold hover:bg-black dark:hover:bg-slate-200 transition shadow-2xs flex items-center gap-1.5"
                   >
-                    {s}
-                  </span>
-                ))}
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Skill</span>
+                  </button>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2 pt-2">
+                {profile?.skills.map((s) => {
+                  const isAlsoVerified = verifiedSkills.includes(s);
+                  return (
+                    <span
+                      key={s}
+                      className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-2xs transition ${
+                        isAlsoVerified
+                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80'
+                      }`}
+                    >
+                      {isAlsoVerified && <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />}
+                      <span>{s}</span>
+                      {isAlsoVerified && (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-bold uppercase tracking-wider">
+                          Verified
+                        </span>
+                      )}
+                      {isOwner && (
+                        <button
+                          onClick={() => handleRemoveSkillDirectly(s)}
+                          className="text-slate-400 hover:text-rose-500 p-0.5 rounded transition ml-0.5"
+                          title={`Remove ${s}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1388,6 +1666,131 @@ export const PublicPortfolio: React.FC<Props> = ({
                 </div>
               </div>
 
+              {/* Social Media & Professional Profiles Card */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 space-y-3.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <FolderGit2 className="w-4 h-4 text-indigo-500" />
+                    <span>Social Media & Profiles</span>
+                  </h4>
+                  {isOwner && (
+                    <button
+                      onClick={handleOpenEditProfile}
+                      className="text-[11px] font-bold text-indigo-600 hover:underline"
+                    >
+                      Manage
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  {/* GitHub Item */}
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 flex items-center justify-between gap-2 group">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                        <GithubIcon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 dark:text-white truncate">GitHub</div>
+                        <div className="text-[11px] text-slate-500 truncate font-mono">
+                          {githubLink ? extractSocialHandle(githubLink.url, 'github') : 'Not linked'}
+                        </div>
+                      </div>
+                    </div>
+                    {githubLink ? (
+                      <a
+                        href={githubLink.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-[11px] border border-slate-200 dark:border-slate-600 flex items-center gap-1 shrink-0 transition"
+                      >
+                        <span>Visit</span>
+                        <ExternalLink className="w-3 h-3 text-slate-400" />
+                      </a>
+                    ) : isOwner ? (
+                      <button
+                        onClick={handleOpenEditProfile}
+                        className="text-[11px] text-emerald-600 font-bold hover:underline shrink-0"
+                      >
+                        + Connect
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 shrink-0">Unlinked</span>
+                    )}
+                  </div>
+
+                  {/* LinkedIn Item */}
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 flex items-center justify-between gap-2 group">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-[#0A66C2] text-white flex items-center justify-center shrink-0 shadow-2xs">
+                        <LinkedinIcon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 dark:text-white truncate">LinkedIn</div>
+                        <div className="text-[11px] text-slate-500 truncate font-mono">
+                          {linkedinLink ? extractSocialHandle(linkedinLink.url, 'linkedin') : 'Not linked'}
+                        </div>
+                      </div>
+                    </div>
+                    {linkedinLink ? (
+                      <a
+                        href={linkedinLink.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-[11px] border border-slate-200 dark:border-slate-600 flex items-center gap-1 shrink-0 transition"
+                      >
+                        <span>Visit</span>
+                        <ExternalLink className="w-3 h-3 text-slate-400" />
+                      </a>
+                    ) : isOwner ? (
+                      <button
+                        onClick={handleOpenEditProfile}
+                        className="text-[11px] text-emerald-600 font-bold hover:underline shrink-0"
+                      >
+                        + Connect
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 shrink-0">Unlinked</span>
+                    )}
+                  </div>
+
+                  {/* Behance Item */}
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 flex items-center justify-between gap-2 group">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-[#0057FF] text-white flex items-center justify-center shrink-0 shadow-2xs">
+                        <BehanceIcon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 dark:text-white truncate">Behance</div>
+                        <div className="text-[11px] text-slate-500 truncate font-mono">
+                          {behanceLink ? extractSocialHandle(behanceLink.url, 'behance') : 'Not linked'}
+                        </div>
+                      </div>
+                    </div>
+                    {behanceLink ? (
+                      <a
+                        href={behanceLink.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-[11px] border border-slate-200 dark:border-slate-600 flex items-center gap-1 shrink-0 transition"
+                      >
+                        <span>Visit</span>
+                        <ExternalLink className="w-3 h-3 text-slate-400" />
+                      </a>
+                    ) : isOwner ? (
+                      <button
+                        onClick={handleOpenEditProfile}
+                        className="text-[11px] text-emerald-600 font-bold hover:underline shrink-0"
+                      >
+                        + Connect
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 shrink-0">Unlinked</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* External Links */}
               {profile?.portfolioLinks && profile.portfolioLinks.length > 0 && (
                 <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 space-y-3 shadow-sm">
@@ -1563,6 +1966,97 @@ export const PublicPortfolio: React.FC<Props> = ({
                       </button>
                     </span>
                   ))}
+                </div>
+              </div>
+
+              {/* Social Media & External Profiles Section */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                <div>
+                  <label className="block font-bold text-slate-800 dark:text-slate-200 mb-0.5 flex items-center gap-1.5 text-xs">
+                    <FolderGit2 className="w-4 h-4 text-indigo-500" />
+                    <span>Social Media & Professional Profiles</span>
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Connect your GitHub, LinkedIn, and Behance profiles so businesses can review your public code, design portfolios, and credentials.
+                  </p>
+                </div>
+
+                {/* GitHub Input */}
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 text-[11px] flex items-center gap-1.5">
+                    <GithubIcon className="w-3.5 h-3.5 text-slate-900 dark:text-white" />
+                    <span>GitHub Profile (Repositories & Open Source)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={editGithub}
+                      onChange={(e) => setEditGithub(e.target.value)}
+                      placeholder="https://github.com/username or @username"
+                      className="w-full pl-3 pr-8 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs"
+                    />
+                    {editGithub && (
+                      <button
+                        type="button"
+                        onClick={() => setEditGithub('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* LinkedIn Input */}
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 text-[11px] flex items-center gap-1.5">
+                    <LinkedinIcon className="w-3.5 h-3.5 text-[#0A66C2]" />
+                    <span>LinkedIn Profile (Professional Network & Endorsements)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={editLinkedin}
+                      onChange={(e) => setEditLinkedin(e.target.value)}
+                      placeholder="https://linkedin.com/in/username"
+                      className="w-full pl-3 pr-8 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs"
+                    />
+                    {editLinkedin && (
+                      <button
+                        type="button"
+                        onClick={() => setEditLinkedin('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Behance Input */}
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 text-[11px] flex items-center gap-1.5">
+                    <BehanceIcon className="w-3.5 h-3.5 text-[#0057FF]" />
+                    <span>Behance Profile (Design Showcase & Case Studies)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={editBehance}
+                      onChange={(e) => setEditBehance(e.target.value)}
+                      placeholder="https://behance.net/username"
+                      className="w-full pl-3 pr-8 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs"
+                    />
+                    {editBehance && (
+                      <button
+                        type="button"
+                        onClick={() => setEditBehance('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 

@@ -92,6 +92,11 @@ export const INITIAL_STUDENT_PROFILES: Record<string, StudentProfile> = {
     pinnedBadgeIds: ['early-adopter', 'top-rated', 'project-completed'],
     availability: 'AVAILABLE',
     coverImageUrl: '/src/assets/images/hero_student_creator_1791569699063.jpg',
+    socialLinks: [
+      { platform: 'github', url: 'https://github.com/aarav-sharma' },
+      { platform: 'linkedin', url: 'https://linkedin.com/in/aarav-sharma-dev' },
+      { platform: 'behance', url: 'https://behance.net/aaravsharma' }
+    ]
   },
   'student-2': {
     userId: 'student-2',
@@ -115,6 +120,11 @@ export const INITIAL_STUDENT_PROFILES: Record<string, StudentProfile> = {
     pinnedBadgeIds: ['early-adopter', 'top-rated', 'project-completed', 'direct-payout'],
     availability: 'AVAILABLE',
     coverImageUrl: '/src/assets/images/showcase_brand_design_1791569720240.jpg',
+    socialLinks: [
+      { platform: 'behance', url: 'https://behance.net/ananyaiyer' },
+      { platform: 'linkedin', url: 'https://linkedin.com/in/ananyaiyer' },
+      { platform: 'github', url: 'https://github.com/ananyaiyer' }
+    ]
   }
 };
 

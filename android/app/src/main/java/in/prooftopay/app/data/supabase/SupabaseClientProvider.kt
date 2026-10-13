@@ -18,13 +18,25 @@ object SupabaseClientProvider {
     private var customUrl: String? = null
     private var customAnonKey: String? = null
 
+    private fun isPlaceholder(value: String?): Boolean {
+        if (value.isNullOrBlank()) return true
+        val lower = value.lowercase()
+        return lower.contains("your-project") ||
+                lower.contains("dummy_anon_key") ||
+                lower.contains("placeholder") ||
+                lower.contains("change-this")
+    }
+
     val isConfigured: Boolean
-        get() = (!customUrl.isNullOrBlank() && !customAnonKey.isNullOrBlank()) ||
-                (BuildConfig.SUPABASE_URL != "https://your-project.supabase.co" && BuildConfig.SUPABASE_ANON_KEY != "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key")
+        get() {
+            val url = customUrl ?: BuildConfig.SUPABASE_URL
+            val key = customAnonKey ?: BuildConfig.SUPABASE_PUBLISHABLE_KEY.ifEmpty { BuildConfig.SUPABASE_ANON_KEY }
+            return !isPlaceholder(url) && !isPlaceholder(key) && url.startsWith("http")
+        }
 
     fun setCredentials(url: String, anonKey: String) {
-        customUrl = url
-        customAnonKey = anonKey
+        customUrl = url.trim()
+        customAnonKey = anonKey.trim()
         _client = null
     }
 
@@ -32,9 +44,17 @@ object SupabaseClientProvider {
 
     val client: SupabaseClient
         get() {
+            if (!isConfigured) {
+                throw IllegalStateException(
+                    "Supabase backend is not configured for Android. " +
+                    "Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in android/gradle.properties " +
+                    "or system environment variables. Never embed service-role keys in the APK."
+                )
+            }
+
             if (_client == null) {
-                val url = customUrl ?: BuildConfig.SUPABASE_URL
-                val key = customAnonKey ?: BuildConfig.SUPABASE_ANON_KEY
+                val url = (customUrl ?: BuildConfig.SUPABASE_URL).trim()
+                val key = (customAnonKey ?: BuildConfig.SUPABASE_PUBLISHABLE_KEY.ifEmpty { BuildConfig.SUPABASE_ANON_KEY }).trim()
 
                 _client = createSupabaseClient(
                     supabaseUrl = url,

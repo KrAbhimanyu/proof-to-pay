@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../../types';
 import { marketplaceStore } from '../../lib/storage';
-import { Users, Shield, Building2, GraduationCap, RotateCcw, Smartphone, Monitor } from 'lucide-react';
+import { Users, Shield, Building2, GraduationCap, RotateCcw, Smartphone, Monitor, Database } from 'lucide-react';
+import { isSupabaseConfigured } from '../../lib/supabaseClient';
 
 interface Props {
   currentUser: User | null;
@@ -55,6 +56,22 @@ export const RoleSwitcher: React.FC<Props> = ({
         {/* Left: Current Active Role status & selector */}
         <div className="flex items-center gap-2">
           <span className="text-slate-400 font-medium hidden sm:inline">Role Sandbox:</span>
+
+          {isSupabaseConfigured() ? (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              Live Supabase
+            </span>
+          ) : (
+            <button
+              onClick={onOpenAndroidGuide}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-950/80 text-amber-300 border border-amber-800/80 font-medium hover:bg-amber-900 transition"
+              title="Click to view Supabase connection setup"
+            >
+              <Database className="w-2.5 h-2.5 text-amber-400" />
+              Demo Mode
+            </button>
+          )}
           
           <div className="relative">
             <button

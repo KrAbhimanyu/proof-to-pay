@@ -1,0 +1,8 @@
+## Android Local Configuration Example
+## Copy this file to `android/local.properties` (which is excluded from Git via .gitignore)
+## or set environment variables: SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY.
+## WARNING: Only use public/publishable (anon) keys. NEVER embed the service_role key.
+
+# sdk.dir=/path/to/Android/Sdk
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key

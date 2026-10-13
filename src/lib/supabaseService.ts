@@ -28,9 +28,10 @@ class SupabaseService {
 
   public initClient(): boolean {
     const config = getSupabaseConfig();
-    if (config.isConfigured && config.url && config.anonKey) {
+    if (config.isConfigured && config.url && (config.publishableKey || config.anonKey)) {
       try {
-        this.client = createClient(config.url, config.anonKey, {
+        const key = config.publishableKey || config.anonKey;
+        this.client = createClient(config.url, key, {
           auth: {
             persistSession: true,
             autoRefreshToken: true,
@@ -338,7 +339,12 @@ class SupabaseService {
   public async testConnection(): Promise<{ success: boolean; latencyMs: number; error?: string }> {
     const sb = this.getClient();
     if (!sb) {
-      return { success: false, latencyMs: 0, error: 'Supabase client is not configured. Provide URL and Anon Key in Settings.' };
+      const config = getSupabaseConfig();
+      return {
+        success: false,
+        latencyMs: 0,
+        error: config.error || 'Supabase client is not configured. Define VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.local.',
+      };
     }
     const start = performance.now();
     try {

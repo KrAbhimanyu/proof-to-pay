@@ -11,6 +11,7 @@ import { AuthModal } from './components/pages/AuthModal';
 import { BetaBanner } from './components/common/BetaBanner';
 import { BetaFeedbackModal } from './components/common/BetaFeedbackModal';
 import { ReportAbuseModal } from './components/common/ReportAbuseModal';
+import { BackendStatusBanner } from './components/common/BackendStatusBanner';
 
 import { LandingPage } from './components/pages/LandingPage';
 import { BrowseProjects } from './components/pages/BrowseProjects';
@@ -28,6 +29,7 @@ export default function App() {
   const [viewParam, setViewParam] = useState<string | undefined>(undefined);
   const [isAndroidView, setIsAndroidView] = useState<boolean>(false);
   const [isAndroidGuideOpen, setIsAndroidGuideOpen] = useState<boolean>(false);
+  const [androidGuideTab, setAndroidGuideTab] = useState<'compose' | 'supabase' | 'install' | 'code'>('compose');
   
   // Auth modal
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
@@ -208,7 +210,18 @@ export default function App() {
         onUserChange={handleUserChange}
         isAndroidView={isAndroidView}
         onToggleAndroidView={() => setIsAndroidView(!isAndroidView)}
-        onOpenAndroidGuide={() => setIsAndroidGuideOpen(true)}
+        onOpenAndroidGuide={() => {
+          setAndroidGuideTab('compose');
+          setIsAndroidGuideOpen(true);
+        }}
+      />
+
+      {/* Database Connection & Demo Mode Banner */}
+      <BackendStatusBanner
+        onOpenSetupGuide={() => {
+          setAndroidGuideTab('supabase');
+          setIsAndroidGuideOpen(true);
+        }}
       />
 
       {/* Beta Launch Community Banner */}
@@ -253,6 +266,7 @@ export default function App() {
       {/* Android APK & Install Guide Modal */}
       <AndroidAppGuideModal
         isOpen={isAndroidGuideOpen}
+        initialTab={androidGuideTab}
         onClose={() => setIsAndroidGuideOpen(false)}
       />
 
