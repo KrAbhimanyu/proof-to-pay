@@ -34,15 +34,17 @@ import {
   SlidersHorizontal,
   Check,
   Ban,
-  ArrowRight
+  ArrowRight,
+  LogOut
 } from 'lucide-react';
 
 interface Props {
   currentUser: User;
   onNavigate: (view: string, param?: string) => void;
+  onLogout?: () => void;
 }
 
-export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate }) => {
+export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLogout }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'beta_ops' | 'monetization' | 'verifications' | 'projects' | 'disputes' | 'users' | 'audit_logs' | 'tests'>('monetization');
 
   const users = marketplaceStore.getUsers();
@@ -371,13 +373,26 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate }) => 
           </div>
         </div>
 
-        <button
-          onClick={() => setActiveTab('tests')}
-          className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition flex items-center gap-2 shrink-0"
-        >
-          <PlayCircle className="w-4 h-4" />
-          <span>Run Platform Test Suite</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setActiveTab('tests')}
+            className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition flex items-center gap-2 shrink-0"
+          >
+            <PlayCircle className="w-4 h-4" />
+            <span>Run Platform Test Suite</span>
+          </button>
+
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              title="Sign out of admin session"
+              className="px-3.5 py-2.5 rounded-xl border border-slate-700 hover:border-rose-400 bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition shrink-0"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}

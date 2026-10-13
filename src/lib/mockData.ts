@@ -645,6 +645,7 @@ export const INITIAL_REVIEWS: VerifiedReview[] = [
     rating: 5,
     comment: 'Aarav is an extraordinary emerging engineer. He did not just write the code—he optimized our bundle size, wrote clean TypeScript types, and delivered two days before the deadline. Will hire again!',
     verifiedDeliverableSummary: 'Production Next.js repository with 98 Lighthouse performance score.',
+    endorsedSkills: ['React', 'Next.js', 'TypeScript', 'Tailwind CSS', 'Performance Optimization'],
     createdAt: '2026-09-17T10:00:00.000Z',
   },
   {
@@ -659,6 +660,20 @@ export const INITIAL_REVIEWS: VerifiedReview[] = [
     comment: 'Siddharth and HyperFlow Labs provided crystal clear specifications and tested the PR promptly. Payment was confirmed within 30 minutes of approval. Ideal client experience!',
     verifiedDeliverableSummary: 'Delivered marketing codebase and dynamic pricing widget.',
     createdAt: '2026-09-17T11:30:00.000Z',
+  },
+  {
+    id: 'rev-3',
+    projectId: 'proj-old-demo',
+    projectTitle: 'E-Commerce Icon Pack Vector Design Suite',
+    reviewerId: 'business-2',
+    reviewerName: 'Preeti Deshmukh (Acme Ventures)',
+    reviewerRole: 'BUSINESS',
+    targetUserId: 'student-1',
+    rating: 5,
+    comment: 'Exceptional visual polish and SVG scalability. Aarav designed 64 bespoke icons matching our Figma design system specifications with zero revisions required.',
+    verifiedDeliverableSummary: 'Delivered 64 production SVGs and React icon component package.',
+    endorsedSkills: ['Figma', 'UI/UX Design', 'SVG Vector Illustration', 'Design Systems'],
+    createdAt: '2026-08-11T12:00:00.000Z',
   }
 ];
 

@@ -11,7 +11,8 @@ import {
   Battery,
   Shield,
   Smartphone,
-  Sparkles
+  Sparkles,
+  LogOut
 } from 'lucide-react';
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
   activeView: string;
   onNavigate: (view: string, param?: string) => void;
   onOpenAuth: (mode?: 'login' | 'register_student' | 'register_business') => void;
+  onLogout?: () => void;
   children: React.ReactNode;
 }
 
@@ -27,6 +29,7 @@ export const AndroidShell: React.FC<Props> = ({
   activeView,
   onNavigate,
   onOpenAuth,
+  onLogout,
   children,
 }) => {
   // Mobile bottom tab active selection
@@ -82,18 +85,28 @@ export const AndroidShell: React.FC<Props> = ({
             </button>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {currentUser ? (
-              <button
-                onClick={() => {
-                  if (currentUser.role === 'STUDENT') onNavigate('student_dashboard');
-                  else if (currentUser.role === 'BUSINESS') onNavigate('business_dashboard');
-                  else if (currentUser.role === 'ADMIN') onNavigate('admin_dashboard');
-                }}
-                className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-800 dark:text-slate-200"
-              >
-                {currentUser.name.split(' ')[0]} ({currentUser.role[0]})
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    if (currentUser.role === 'STUDENT') onNavigate('student_dashboard');
+                    else if (currentUser.role === 'BUSINESS') onNavigate('business_dashboard');
+                    else if (currentUser.role === 'ADMIN') onNavigate('admin_dashboard');
+                  }}
+                  className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-800 dark:text-slate-200"
+                >
+                  {currentUser.name.split(' ')[0]} ({currentUser.role[0]})
+                </button>
+
+                <button
+                  onClick={onLogout}
+                  title="Sign Out / Log Out"
+                  className="p-1 rounded-full text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </>
             ) : (
               <button
                 onClick={() => onOpenAuth('login')}

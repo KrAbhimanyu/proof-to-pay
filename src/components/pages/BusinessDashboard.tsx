@@ -40,15 +40,17 @@ import {
   Info,
   Sparkles,
   Lock,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 
 interface Props {
   currentUser: User;
   onNavigate: (view: string, param?: string) => void;
+  onLogout?: () => void;
 }
 
-export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate }) => {
+export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLogout }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'create_project' | 'applications' | 'active_work' | 'payments' | 'verification'>('overview');
 
   const profile = marketplaceStore.getBusinessProfile(currentUser.id) || {
@@ -421,6 +423,17 @@ export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate }) 
             <Plus className="w-4 h-4" />
             <span>Post New Project</span>
           </button>
+
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              title="Sign out of account"
+              className="px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-rose-300 dark:hover:border-rose-800 bg-slate-50 dark:bg-slate-800/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-600 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 text-xs font-semibold flex items-center gap-1.5 transition"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
+          )}
         </div>
       </div>
 

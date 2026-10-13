@@ -12,6 +12,7 @@ import { BetaBanner } from './components/common/BetaBanner';
 import { BetaFeedbackModal } from './components/common/BetaFeedbackModal';
 import { ReportAbuseModal } from './components/common/ReportAbuseModal';
 import { BackendStatusBanner } from './components/common/BackendStatusBanner';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 import { LandingPage } from './components/pages/LandingPage';
 import { BrowseProjects } from './components/pages/BrowseProjects';
@@ -60,6 +61,13 @@ export default function App() {
   const handleOpenAuth = (mode: 'login' | 'register_student' | 'register_business' = 'login') => {
     setAuthMode(mode);
     setIsAuthOpen(true);
+  };
+
+  // Handle Logout
+  const handleLogout = () => {
+    marketplaceStore.setCurrentUserId(null);
+    setCurrentUser(null);
+    setActiveView('landing');
   };
 
   // Sync current user state
@@ -118,11 +126,16 @@ export default function App() {
         ) : (
           <div className="p-12 text-center">Project not found</div>
         );
-      case 'student_dashboard':
-        return currentUser ? (
+      case 'student_dashboard': {
+        const studentUser = (currentUser && currentUser.role === 'STUDENT')
+          ? currentUser
+          : (marketplaceStore.getUsers().find((u) => u.role === 'STUDENT') || currentUser);
+
+        return studentUser ? (
           <StudentDashboard
-            currentUser={currentUser}
+            currentUser={studentUser}
             onNavigate={handleNavigate}
+            onLogout={handleLogout}
           />
         ) : (
           <LandingPage
@@ -132,11 +145,13 @@ export default function App() {
             onOpenAuth={handleOpenAuth}
           />
         );
+      }
       case 'business_dashboard':
         return currentUser ? (
           <BusinessDashboard
             currentUser={currentUser}
             onNavigate={handleNavigate}
+            onLogout={handleLogout}
           />
         ) : (
           <LandingPage
@@ -151,6 +166,7 @@ export default function App() {
           <AdminDashboard
             currentUser={currentUser}
             onNavigate={handleNavigate}
+            onLogout={handleLogout}
           />
         ) : (
           <LandingPage
@@ -240,8 +256,11 @@ export default function App() {
           activeView={activeView}
           onNavigate={handleNavigate}
           onOpenAuth={handleOpenAuth}
+          onLogout={handleLogout}
         >
-          {renderContent()}
+          <ErrorBoundary fallbackTitle="Mobile View Recovery">
+            {renderContent()}
+          </ErrorBoundary>
         </AndroidShell>
       ) : (
         <>
@@ -250,10 +269,13 @@ export default function App() {
             activeView={activeView}
             onNavigate={handleNavigate}
             onOpenAuth={handleOpenAuth}
+            onLogout={handleLogout}
           />
 
           <main className="flex-1">
-            {renderContent()}
+            <ErrorBoundary fallbackTitle="Dashboard & View Recovery">
+              {renderContent()}
+            </ErrorBoundary>
           </main>
 
           <Footer

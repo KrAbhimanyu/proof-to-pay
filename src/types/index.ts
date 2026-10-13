@@ -419,6 +419,7 @@ export interface VerifiedReview {
   rating: number; // 1-5
   comment: string;
   verifiedDeliverableSummary: string;
+  endorsedSkills?: string[];
   createdAt: string;
 }
 

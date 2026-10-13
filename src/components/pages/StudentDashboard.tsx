@@ -6,6 +6,9 @@ import { Badges } from '../common/Badges';
 import { ScopeLockModal } from '../common/ScopeLockModal';
 import { ScopeChangeModal } from '../common/ScopeChangeModal';
 import { WorkTrail } from '../common/WorkTrail';
+import { PaymentHistory } from '../common/PaymentHistory';
+import { VerifiedSkills } from '../common/VerifiedSkills';
+import { EarningsPerformanceChart } from '../common/EarningsPerformanceChart';
 import confetti from 'canvas-confetti';
 import {
   GraduationCap,
@@ -35,38 +38,53 @@ import {
   Edit3,
   X,
   FileCheck,
-  Shield
+  Shield,
+  Search,
+  HelpCircle,
+  LifeBuoy,
+  ArrowRight,
+  LogOut
 } from 'lucide-react';
 
 interface Props {
   currentUser: User;
   onNavigate: (view: string, param?: string) => void;
+  onLogout?: () => void;
 }
 
-export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'applications' | 'active_projects' | 'payments' | 'badges' | 'portfolio' | 'profile' | 'settings'>('overview');
+export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLogout }) => {
+  const [activeTab, setActiveTab] = useState<'overview' | 'applications' | 'active_projects' | 'skills' | 'payments' | 'badges' | 'portfolio' | 'profile' | 'settings'>('overview');
 
-  const profile = marketplaceStore.getStudentProfile(currentUser.id) || {
-    userId: currentUser.id,
-    headline: 'Emerging Creator',
-    bio: '',
-    age: 20,
-    skills: ['UI/UX', 'React'],
-    experienceLevel: 'INTERMEDIATE',
-    portfolioLinks: [],
-    totalEarnedINR: 0,
-    completedProjectsCount: 0,
-    averageRating: 5.0,
-    verifiedPortfolioSlug: currentUser.name.toLowerCase().replace(/\s+/g, '-'),
+  const userId = currentUser?.id || 'student-1';
+  const userName = currentUser?.name || 'Creator';
+  const rawProfile = marketplaceStore.getStudentProfile(userId);
+
+  const profile: StudentProfile = {
+    userId,
+    headline: rawProfile?.headline || 'Emerging Creator',
+    bio: rawProfile?.bio || '',
+    age: rawProfile?.age ?? 20,
+    skills: Array.isArray(rawProfile?.skills) ? rawProfile.skills : ['UI/UX', 'React'],
+    experienceLevel: rawProfile?.experienceLevel || 'INTERMEDIATE',
+    portfolioLinks: rawProfile?.portfolioLinks || [],
+    totalEarnedINR: rawProfile?.totalEarnedINR ?? 0,
+    completedProjectsCount: rawProfile?.completedProjectsCount ?? 0,
+    averageRating: rawProfile?.averageRating ?? 5.0,
+    verifiedPortfolioSlug: rawProfile?.verifiedPortfolioSlug || userName.toLowerCase().replace(/\s+/g, '-'),
+    college: rawProfile?.college || 'University Student',
+    degree: rawProfile?.degree || '',
+    upiId: rawProfile?.upiId || '',
+    pinnedBadgeIds: rawProfile?.pinnedBadgeIds || ['early-adopter', 'top-rated', 'project-completed'],
+    availability: rawProfile?.availability || 'AVAILABLE',
   };
 
-  const applications = marketplaceStore.getApplications().filter((a) => a.studentId === currentUser.id);
-  const offers = marketplaceStore.getOffers().filter((o) => o.studentId === currentUser.id);
-  const activeProjects = marketplaceStore.getProjects().filter((p) => p.selectedStudentId === currentUser.id);
-  const submissions = marketplaceStore.getSubmissions().filter((s) => s.studentId === currentUser.id);
-  const payments = marketplaceStore.getPayments().filter((p) => p.studentId === currentUser.id);
-  const reviews = marketplaceStore.getReviews().filter((r) => r.targetUserId === currentUser.id);
-  const passportItems = marketplaceStore.getProofPassportItems(currentUser.id, false);
+  const applications = (marketplaceStore.getApplications() || []).filter((a) => a.studentId === userId);
+  const offers = (marketplaceStore.getOffers() || []).filter((o) => o.studentId === userId);
+  const activeProjects = (marketplaceStore.getProjects() || []).filter((p) => p.selectedStudentId === userId);
+  const submissions = (marketplaceStore.getSubmissions() || []).filter((s) => s.studentId === userId);
+  const payments = (marketplaceStore.getPayments() || []).filter((p) => p.studentId === userId);
+  const reviews = (marketplaceStore.getReviews() || []).filter((r) => r.targetUserId === userId);
+  const passportItems = marketplaceStore.getProofPassportItems(userId, false) || [];
 
   // Scope Lock & Work Trail Modal States
   const [activeScopeLockProject, setActiveScopeLockProject] = useState<ProjectListing | null>(null);
@@ -96,13 +114,55 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
   const [submissionFileName, setSubmissionFileName] = useState('Deliverable_Final_V1.zip');
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToastMsg({ text, type });
+    setTimeout(() => setToastMsg(null), 4000);
+  };
 
   // Profile Form State
-  const [editBio, setEditBio] = useState(profile.bio);
-  const [editHeadline, setEditHeadline] = useState(profile.headline);
-  const [editSkills, setEditSkills] = useState(profile.skills.join(', '));
+  const [editBio, setEditBio] = useState(profile.bio || '');
+  const [editHeadline, setEditHeadline] = useState(profile.headline || '');
+  const [editSkills, setEditSkills] = useState((profile.skills || []).join(', '));
   const [editUpi, setEditUpi] = useState(profile.upiId || '');
   const [profileSaved, setProfileSaved] = useState(false);
+
+  // Support Request Modal State
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [supportCategory, setSupportCategory] = useState('PAYMENT_UTR');
+  const [supportRelatedProjectId, setSupportRelatedProjectId] = useState('');
+  const [supportSubject, setSupportSubject] = useState('');
+  const [supportMessage, setSupportMessage] = useState('');
+  const [isSubmittingSupport, setIsSubmittingSupport] = useState(false);
+
+  const handleSendSupportRequest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supportSubject.trim() || !supportMessage.trim()) {
+      showToast('Please provide a subject and details for your support request.', 'error');
+      return;
+    }
+    setIsSubmittingSupport(true);
+    try {
+      marketplaceStore.logAudit(
+        currentUser || { id: userId, name: userName, email: '', role: 'STUDENT', createdAt: new Date().toISOString() },
+        'REQUESTED_CREATOR_SUPPORT',
+        'USER',
+        userId,
+        `Category: ${supportCategory} | Subject: "${supportSubject.trim()}" | Details: "${supportMessage.trim()}"`
+      );
+      confetti({ particleCount: 40, spread: 50 });
+      setIsSupportModalOpen(false);
+      setSupportSubject('');
+      setSupportMessage('');
+      setSupportRelatedProjectId('');
+      showToast('Support request submitted! Proof-to-Pay assistance team will review and respond within 4 hours.', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to submit support request.', 'error');
+    } finally {
+      setIsSubmittingSupport(false);
+    }
+  };
 
   // Handle Offer Explicit Acceptance Initiated
   const handleInitiateOfferAcceptance = (offer: ProjectOffer) => {
@@ -117,7 +177,7 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
   const handleConfirmExplicitScopeLock = () => {
     if (!explicitOfferAcceptModal) return;
     if (!deliverablesAgreed || !deadlineAgreed || !revisionsAgreed || !cancellationAgreed || !feeTermsAgreed) {
-      alert('Please check all 5 scope lock terms to confirm explicit mutual acceptance.');
+      showToast('Please check all 5 scope lock terms to confirm explicit mutual acceptance.', 'error');
       return;
     }
     try {
@@ -130,30 +190,29 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
       });
       confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
       setExplicitOfferAcceptModal(null);
-      alert('Scope Lock established! Project terms are now locked and work has commenced.');
+      showToast('Scope Lock established! Project terms are now locked and work has commenced.', 'success');
       setActiveTab('active_projects');
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message, 'error');
     }
   };
 
   const handleDeclineOffer = (offerId: string) => {
-    if (window.confirm('Are you sure you want to decline this project offer?')) {
-      try {
-        marketplaceStore.respondToOffer(currentUser, offerId, false);
-        setExplicitOfferAcceptModal(null);
-        alert('Offer declined.');
-      } catch (err: any) {
-        alert(err.message);
-      }
+    try {
+      marketplaceStore.respondToOffer(currentUser, offerId, false);
+      setExplicitOfferAcceptModal(null);
+      showToast('Offer declined.', 'info');
+    } catch (err: any) {
+      showToast(err.message, 'error');
     }
   };
 
   const handleTogglePassportVisibility = (itemId: string, currentPublic: boolean) => {
     try {
       marketplaceStore.toggleProofPassportVisibility(currentUser, itemId, !currentPublic);
+      showToast(`Proof Passport item is now ${!currentPublic ? 'publicly visible' : 'hidden'}.`);
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message, 'error');
     }
   };
 
@@ -161,8 +220,9 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
     try {
       marketplaceStore.updateProofPassportItem(currentUser, itemId, { sanitizedSummary: editingPassportSummary });
       setEditingPassportItemId(null);
+      showToast('Summary updated successfully.');
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message, 'error');
     }
   };
 
@@ -179,7 +239,7 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
     setNewSampleTitle('');
     setNewSampleUrl('');
     setNewSampleDesc('');
-    alert('Self-uploaded work sample added to your portfolio profile.');
+    showToast('Self-uploaded work sample added to your portfolio profile.');
   };
 
   const handleRemoveSelfUploadedSample = (index: number) => {
@@ -187,19 +247,17 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
     marketplaceStore.updateStudentProfile(currentUser.id, {
       portfolioLinks: currentLinks.filter((_, i) => i !== index)
     });
+    showToast('Work sample removed.');
   };
 
   // Handle Payment Receipt Confirmation
   const handleConfirmPaymentReceipt = (projectId: string) => {
-    if (window.confirm('Confirm that you have received the full agreed project amount in your bank account / UPI?')) {
-      try {
-        marketplaceStore.confirmProjectPaymentReceipt(currentUser, projectId);
-        confetti({ particleCount: 60, spread: 50 });
-        alert('Payment receipt confirmed! This verified settlement is permanently logged.');
-        window.location.reload();
-      } catch (err: any) {
-        alert(err.message);
-      }
+    try {
+      marketplaceStore.confirmProjectPaymentReceipt(currentUser, projectId);
+      confetti({ particleCount: 60, spread: 50 });
+      showToast('Payment receipt confirmed! This verified settlement is permanently logged.', 'success');
+    } catch (err: any) {
+      showToast(err.message, 'error');
     }
   };
 
@@ -210,10 +268,9 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
       try {
         marketplaceStore.disputeProjectPayment(currentUser, projectId, reason);
         marketplaceStore.fileDispute(currentUser, projectId, 'Payout dispute: ' + reason, 'Student reported payment discrepancy with business UTR.');
-        alert('Payment dispute filed. An administrator will investigate with the business.');
-        window.location.reload();
+        showToast('Payment dispute filed. An administrator will investigate with the business.', 'info');
       } catch (err: any) {
-        alert(err.message);
+        showToast(err.message, 'error');
       }
     }
   };
@@ -281,18 +338,18 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
       <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 p-1 shadow-md shrink-0">
-            {currentUser.avatarUrl ? (
-              <img src={currentUser.avatarUrl} alt={currentUser.name} className="w-full h-full object-cover rounded-[14px]" />
+            {currentUser?.avatarUrl ? (
+              <img src={currentUser.avatarUrl} alt={currentUser.name || 'Creator'} className="w-full h-full object-cover rounded-[14px]" />
             ) : (
               <div className="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center text-white font-bold text-xl">
-                {currentUser.name[0]}
+                {(currentUser?.name || 'C')[0] || 'C'}
               </div>
             )}
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
-                {currentUser.name}
+                {currentUser?.name || 'Verified Creator'}
               </h1>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
                 18+ Verified Creator
@@ -300,7 +357,7 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
             </div>
             <p className="text-xs text-slate-500 mt-0.5">{profile.headline}</p>
             <div className="flex items-center gap-3 text-xs text-slate-400 mt-2">
-              <span>{currentUser.city || 'India'}</span>
+              <span>{currentUser?.city || 'India'}</span>
               <span>·</span>
               <span>{profile.college || 'University Student'}</span>
             </div>
@@ -309,7 +366,7 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
             <div className="mt-3">
               <Badges
                 profile={profile}
-                user={currentUser}
+                user={currentUser || { id: userId, name: userName, email: '', role: 'STUDENT', createdAt: new Date().toISOString() }}
                 reviews={reviews}
                 submissions={submissions}
                 projects={activeProjects}
@@ -321,27 +378,122 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
           </div>
         </div>
 
-        {/* Stats Pill Strip */}
-        <div className="grid grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
-          <div>
-            <div className="text-[10px] font-semibold text-slate-400 uppercase">Earned (INR)</div>
-            <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-              ₹{profile.totalEarnedINR.toLocaleString('en-IN')}
+        {/* Stats Pill Strip & Sign Out */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="grid grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+            <div>
+              <div className="text-[10px] font-semibold text-slate-400 uppercase">Earned (INR)</div>
+              <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                ₹{(profile.totalEarnedINR ?? 0).toLocaleString('en-IN')}
+              </div>
+            </div>
+            <div className="border-x border-slate-200 dark:border-slate-700 px-3">
+              <div className="text-[10px] font-semibold text-slate-400 uppercase">Completed</div>
+              <div className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400">
+                {profile.completedProjectsCount ?? 0}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold text-slate-400 uppercase">Rating</div>
+              <div className="text-base sm:text-lg font-black text-amber-500 flex items-center justify-center gap-1">
+                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                <span>{(profile.averageRating ?? 5.0).toFixed(1)}</span>
+              </div>
             </div>
           </div>
-          <div className="border-x border-slate-200 dark:border-slate-700 px-3">
-            <div className="text-[10px] font-semibold text-slate-400 uppercase">Completed</div>
-            <div className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400">
-              {profile.completedProjectsCount}
-            </div>
+
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              title="Sign out of account"
+              className="px-3 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-rose-300 dark:hover:border-rose-800 bg-slate-50 dark:bg-slate-800/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-600 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Quick Actions Row */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="p-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
+              <Sparkles className="w-4 h-4" />
+            </span>
+            <h2 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+              Quick Actions
+            </h2>
           </div>
-          <div>
-            <div className="text-[10px] font-semibold text-slate-400 uppercase">Rating</div>
-            <div className="text-base sm:text-lg font-black text-amber-500 flex items-center justify-center gap-1">
-              <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-              <span>{profile.averageRating.toFixed(1)}</span>
+          <span className="text-[11px] text-slate-400 hidden sm:inline">
+            Direct shortcuts to discover projects, share credentials, and contact support
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* 1. Find New Projects */}
+          <button
+            onClick={() => onNavigate('browse')}
+            className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50/40 dark:from-emerald-950/40 dark:to-slate-900 border border-emerald-200 dark:border-emerald-800/80 hover:border-emerald-400 dark:hover:border-emerald-600 hover:shadow-md transition text-left group flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition shrink-0">
+                <Search className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">
+                  Find New Projects
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Browse open listings & submit pitches
+                </p>
+              </div>
             </div>
-          </div>
+            <ArrowRight className="w-4 h-4 text-emerald-600 dark:text-emerald-400 group-hover:translate-x-1 transition shrink-0 ml-2" />
+          </button>
+
+          {/* 2. View Portfolio */}
+          <button
+            onClick={() => onNavigate('portfolio', profile.verifiedPortfolioSlug || userName.toLowerCase().replace(/\s+/g, '-'))}
+            className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50/40 dark:from-indigo-950/40 dark:to-slate-900 border border-indigo-200 dark:border-indigo-800/80 hover:border-indigo-400 dark:hover:border-indigo-600 hover:shadow-md transition text-left group flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition shrink-0">
+                <ExternalLink className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
+                  View Portfolio
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Public Proof Passport & verified badges
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-indigo-600 dark:text-indigo-400 group-hover:translate-x-1 transition shrink-0 ml-2" />
+          </button>
+
+          {/* 3. Request Support */}
+          <button
+            onClick={() => setIsSupportModalOpen(true)}
+            className="p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50/40 dark:from-amber-950/40 dark:to-slate-900 border border-amber-200 dark:border-amber-800/80 hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-md transition text-left group flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition shrink-0">
+                <HelpCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition">
+                  Request Support
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Payments, scope lock & arbitration help
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-amber-600 dark:text-amber-400 group-hover:translate-x-1 transition shrink-0 ml-2" />
+          </button>
         </div>
       </div>
 
@@ -388,6 +540,21 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
               {activeProjects.length}
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('skills')}
+          className={`pb-3 px-2 border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === 'skills'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
+          }`}
+        >
+          <Award className="w-3.5 h-3.5 text-emerald-500" />
+          <span>Verified Skills</span>
+          <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 text-[10px] flex items-center justify-center font-bold">
+            ✓
+          </span>
         </button>
 
         <button
@@ -492,6 +659,13 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
             </div>
           ))}
 
+          {/* Summary Card with Bar Chart: Visualizing Total Projects Completed & Total Earnings */}
+          <EarningsPerformanceChart
+            profile={profile}
+            payments={payments}
+            projects={activeProjects}
+          />
+
           {/* Quick Actions & Recent Summary */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-4">
@@ -552,6 +726,46 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Client-Endorsed Skills Showcase Card */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <Award className="w-4 h-4" />
+                </div>
+                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                  Client-Endorsed Skills
+                </h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                  Verified by Businesses
+                </span>
+              </div>
+              <button
+                onClick={() => setActiveTab('skills')}
+                className="text-xs text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
+              >
+                <span>View skills breakdown</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Technical and creative capabilities verified through completed client milestones and client review feedback:
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {['React', 'TypeScript', 'Next.js', 'Tailwind CSS', 'Performance Optimization', 'Figma', 'UI/UX Design'].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setActiveTab('skills')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold hover:scale-105 transition shadow-2xs"
+                >
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                  <span>{s}</span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">★ 5.0</span>
+                </button>
+              ))}
             </div>
           </div>
 
@@ -916,18 +1130,27 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
         </div>
       )}
 
+      {/* Tab: Verified Skills Endorsed by Businesses */}
+      {activeTab === 'skills' && (
+        <VerifiedSkills
+          studentId={currentUser.id}
+          currentUser={currentUser}
+          onNavigateToProject={(projId) => onNavigate('project_detail', projId)}
+        />
+      )}
+
       {/* Tab 4: Payment Tracking */}
       {activeTab === 'payments' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Audited Payment Records</h2>
-              <p className="text-xs text-slate-500">All payments are in INR with traceable bank UTR references</p>
+              <p className="text-xs text-slate-500">Live ledger of all direct UPI & bank settlements with traceable bank UTR references</p>
             </div>
             <div className="text-right">
               <span className="text-xs text-slate-400">Total Cleared</span>
-              <div className="text-xl font-black text-emerald-600">
-                ₹{profile.totalEarnedINR.toLocaleString('en-IN')} INR
+              <div className="text-xl font-black text-emerald-600 dark:text-emerald-400">
+                ₹{(profile.totalEarnedINR ?? 0).toLocaleString('en-IN')} INR
               </div>
             </div>
           </div>
@@ -939,73 +1162,11 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
             </span>
           </div>
 
-          <div className="space-y-4">
-            {payments.map((pay) => {
-              const canConfirm = pay.status === 'REPORTED_BY_BUSINESS' || (pay.status === 'PAID' && !pay.confirmedAt);
-              const isConfirmed = pay.status === 'RECEIPT_CONFIRMED_BY_CREATOR' || !!pay.confirmedAt;
-              const isDisputed = pay.status === 'DISPUTED';
-
-              return (
-                <div key={pay.id} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-base text-slate-900 dark:text-white">{pay.projectTitle}</span>
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      Method: {pay.paymentMethod} {pay.transactionReferenceUTR && `· UTR: ${pay.transactionReferenceUTR}`}
-                    </div>
-                    {pay.notes && <p className="text-xs text-slate-400 italic">{pay.notes}</p>}
-                    {isConfirmed && pay.confirmedAt && (
-                      <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" />
-                        <span>You confirmed receipt on {new Date(pay.confirmedAt).toLocaleDateString()}</span>
-                      </p>
-                    )}
-                    {isDisputed && (
-                      <p className="text-[11px] text-rose-600 font-semibold">
-                        Dispute filed with platform administration.
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex flex-col sm:items-end gap-2 shrink-0">
-                    <div className="font-extrabold text-base text-slate-900 dark:text-white">
-                      ₹{pay.amountINR.toLocaleString('en-IN')} INR
-                    </div>
-                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full inline-block ${
-                      isConfirmed
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                        : isDisputed
-                        ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
-                        : pay.status === 'REPORTED_BY_BUSINESS' || pay.status === 'PAID'
-                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
-                        : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                    }`}>
-                      {pay.status.replace(/_/g, ' ')}
-                    </span>
-
-                    {/* Creator Actions when business reported payment */}
-                    {canConfirm && (
-                      <div className="flex items-center gap-2 pt-1">
-                        <button
-                          onClick={() => handleConfirmPaymentReceipt(pay.projectId)}
-                          className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] transition shadow-sm"
-                        >
-                          Confirm Receipt
-                        </button>
-                        <button
-                          onClick={() => handleDisputePayment(pay.projectId)}
-                          className="px-2.5 py-1 rounded-xl border border-rose-300 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-[11px] font-medium transition"
-                        >
-                          Dispute
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <PaymentHistory
+            studentId={userId}
+            onConfirmReceipt={handleConfirmPaymentReceipt}
+            onDisputePayment={handleDisputePayment}
+          />
         </div>
       )}
 
@@ -1013,7 +1174,7 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
       {activeTab === 'badges' && (
         <Badges
           profile={profile}
-          user={currentUser}
+          user={currentUser || { id: userId, name: userName, email: '', role: 'STUDENT', createdAt: new Date().toISOString() }}
           reviews={reviews}
           submissions={submissions}
           projects={activeProjects}
@@ -1021,7 +1182,7 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
           variant="full"
           isOwner={true}
           onUpdatePinnedBadges={(newPinned) => {
-            marketplaceStore.updateStudentProfile(currentUser.id, { pinnedBadgeIds: newPinned });
+            marketplaceStore.updateStudentProfile(userId, { pinnedBadgeIds: newPinned });
           }}
         />
       )}
@@ -1047,9 +1208,10 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => {
-                  const url = `${window.location.origin}/#portfolio/${profile.verifiedPortfolioSlug}`;
+                  const slug = profile.verifiedPortfolioSlug || userName.toLowerCase().replace(/\s+/g, '-');
+                  const url = `${window.location.origin}/#portfolio/${slug}`;
                   navigator.clipboard.writeText(url);
-                  alert('Shareable Proof Passport URL copied to clipboard!');
+                  showToast('Shareable Proof Passport URL copied to clipboard!', 'success');
                 }}
                 className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold hover:border-emerald-500 transition flex items-center gap-1.5 shadow-2xs"
               >
@@ -1057,7 +1219,7 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
                 <span>Copy Link</span>
               </button>
               <button
-                onClick={() => onNavigate('portfolio', profile.verifiedPortfolioSlug)}
+                onClick={() => onNavigate('portfolio', profile.verifiedPortfolioSlug || userName.toLowerCase().replace(/\s+/g, '-'))}
                 className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-700 transition flex items-center gap-1.5 shadow-sm"
               >
                 <span>View Public Passport</span>
@@ -1411,6 +1573,24 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
             </p>
           </div>
 
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h4 className="font-bold text-slate-900 dark:text-white text-xs">Active Creator Session</h4>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Signed in as <strong className="text-slate-800 dark:text-slate-200">{currentUser?.email || currentUser?.name}</strong> (Student Creator)
+              </p>
+            </div>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 hover:border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-700 dark:text-slate-200 hover:text-rose-600 dark:hover:text-rose-400 text-xs font-semibold flex items-center gap-1.5 transition shrink-0"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out of Account</span>
+              </button>
+            )}
+          </div>
+
           <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
             <h4 className="font-bold text-rose-600 text-sm">Danger Zone</h4>
             <p className="text-xs text-slate-500">
@@ -1660,6 +1840,152 @@ export const StudentDashboard: React.FC<Props> = ({ currentUser, onNavigate }) =
             window.location.reload();
           }}
         />
+      )}
+      {/* MODAL 6: REQUEST SUPPORT MODAL */}
+      {isSupportModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8 space-y-0">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-amber-50/50 dark:bg-amber-950/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-xs shrink-0">
+                  <LifeBuoy className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                    Request Platform Support
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Direct creator assistance for payouts, scope locks & arbitration
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsSupportModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSendSupportRequest} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Support Category *
+                </label>
+                <select
+                  value={supportCategory}
+                  onChange={(e) => setSupportCategory(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium"
+                  required
+                >
+                  <option value="PAYMENT_UTR">Payment Settlement & Bank UTR Tracking</option>
+                  <option value="SCOPE_LOCK">Scope Lock & Deliverable Specifications</option>
+                  <option value="DELIVERABLES">Work Submission & Review Feedback</option>
+                  <option value="DISPUTE">File Project Milestone Dispute / Mediation</option>
+                  <option value="ACCOUNT">Identity Verification & Creator Passport</option>
+                  <option value="GENERAL">General Platform Question</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Related Project (Optional)
+                </label>
+                <select
+                  value={supportRelatedProjectId}
+                  onChange={(e) => setSupportRelatedProjectId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium"
+                >
+                  <option value="">-- No specific project / Platform general --</option>
+                  {activeProjects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title} (₹{p.budgetINR.toLocaleString('en-IN')})
+                    </option>
+                  ))}
+                  {offers.map((o) => (
+                    <option key={o.id} value={o.projectId}>
+                      Offer: {o.projectTitle}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Subject *
+                </label>
+                <input
+                  type="text"
+                  value={supportSubject}
+                  onChange={(e) => setSupportSubject(e.target.value)}
+                  placeholder="e.g., Verification of direct UPI UTR settlement"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Description & Details *
+                </label>
+                <textarea
+                  rows={4}
+                  value={supportMessage}
+                  onChange={(e) => setSupportMessage(e.target.value)}
+                  placeholder="Provide details about your query or milestone. If reporting payment discrepancy, mention reference date or bank details..."
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white leading-relaxed"
+                  required
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 space-y-1">
+                <div className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Proof-to-Pay Support SLA</span>
+                </div>
+                <p>
+                  Creators receive priority resolution within 4 business hours. Student earnings remain protected under platform scope-lock policies.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsSupportModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingSupport}
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{isSubmittingSupport ? 'Submitting...' : 'Submit Support Request'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification Container */}
+      {toastMsg && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-semibold animate-in fade-in slide-in-from-bottom-2 bg-slate-900 text-white border border-slate-700">
+          {toastMsg.type === 'error' ? (
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          )}
+          <span>{toastMsg.text}</span>
+          <button onClick={() => setToastMsg(null)} className="ml-2 text-slate-400 hover:text-white p-0.5">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       )}
     </div>
   );
