@@ -264,6 +264,50 @@ class SupabaseService {
     };
   }
 
+  public async updateStudentProfile(userId: string, data: Partial<StudentProfile>): Promise<void> {
+    const sb = this.getClient();
+    if (!sb) throw new Error('Supabase client not configured');
+    const updatePayload: Record<string, any> = {};
+    if (data.headline !== undefined) updatePayload.headline = data.headline;
+    if (data.bio !== undefined) updatePayload.bio = data.bio;
+    if (data.age !== undefined) updatePayload.age = data.age;
+    if (data.college !== undefined) updatePayload.college = data.college;
+    if (data.degree !== undefined) updatePayload.degree = data.degree;
+    if (data.graduationYear !== undefined) updatePayload.graduation_year = data.graduationYear;
+    if (data.skills !== undefined) updatePayload.skills = data.skills;
+    if (data.experienceLevel !== undefined) updatePayload.experience_level = data.experienceLevel;
+    if (data.portfolioLinks !== undefined) updatePayload.portfolio_links = data.portfolioLinks;
+    if (data.verifiedPortfolioSlug !== undefined) updatePayload.verified_portfolio_slug = data.verifiedPortfolioSlug;
+    if (data.upiId !== undefined) updatePayload.upi_id = data.upiId;
+    if (data.githubUrl !== undefined) updatePayload.github_url = data.githubUrl;
+    if (data.linkedinUrl !== undefined) updatePayload.linkedin_url = data.linkedinUrl;
+    if (data.behanceUrl !== undefined) updatePayload.behance_url = data.behanceUrl;
+    if (data.socialLinks !== undefined) updatePayload.social_links = data.socialLinks;
+
+    const { error } = await sb
+      .from('student_profiles')
+      .update(updatePayload)
+      .eq('user_id', userId);
+    if (error) throw error;
+  }
+
+  public async updateBusinessProfile(userId: string, data: Partial<BusinessProfile>): Promise<void> {
+    const sb = this.getClient();
+    if (!sb) throw new Error('Supabase client not configured');
+    const updatePayload: Record<string, any> = {};
+    if (data.companyName !== undefined) updatePayload.company_name = data.companyName;
+    if (data.tagline !== undefined) updatePayload.tagline = data.tagline;
+    if (data.website !== undefined) updatePayload.website = data.website;
+    if (data.industry !== undefined) updatePayload.industry = data.industry;
+    if (data.city !== undefined) updatePayload.city = data.city;
+
+    const { error } = await sb
+      .from('business_profiles')
+      .update(updatePayload)
+      .eq('user_id', userId);
+    if (error) throw error;
+  }
+
   // --- Projects ---
   public async getProjects(): Promise<ProjectListing[]> {
     const sb = this.getClient();

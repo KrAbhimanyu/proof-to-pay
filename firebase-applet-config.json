@@ -3,6 +3,7 @@
   "appId": "1:169830443310:web:fe94c338a61d6b823af2bf",
   "apiKey": "AIzaSyCCwGQyABb_XLXqtUcWbMWMkFibFcBM7Xk",
   "authDomain": "double-sky-gds98.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-prooftopay-70ff7ee2-c528-49b1-8394-6169bbb782ff",
   "storageBucket": "double-sky-gds98.firebasestorage.app",
   "messagingSenderId": "169830443310",
   "measurementId": "",

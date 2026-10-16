@@ -178,14 +178,19 @@ class MarketplaceStore {
 
   public getCurrentUser(): User | null {
     const users = this.getUsers();
-    const currentId = this.get<string>(STORAGE_KEYS.CURRENT_USER_ID, 'student-1');
+    const currentId = this.get<string | null>(STORAGE_KEYS.CURRENT_USER_ID, null);
     if (!currentId) return null;
-    return users.find((u) => u.id === currentId && !u.isSuspended) || users[0] || null;
+    return users.find((u) => u.id === currentId && !u.isSuspended) || null;
   }
 
   public setCurrentUserId(userId: string | null): void {
     if (!userId) {
-      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER_ID);
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem(STORAGE_KEYS.CURRENT_USER_ID);
+        }
+      } catch {}
+      delete this.memoryStore[STORAGE_KEYS.CURRENT_USER_ID];
     } else {
       this.set(STORAGE_KEYS.CURRENT_USER_ID, userId);
     }

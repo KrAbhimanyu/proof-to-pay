@@ -48,10 +48,24 @@ interface Props {
   currentUser: User;
   onNavigate: (view: string, param?: string) => void;
   onLogout?: () => void;
+  controlledTab?: string;
+  onTabChange?: (tab: string) => void;
 }
 
-export const BusinessDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'create_project' | 'applications' | 'active_work' | 'payments' | 'verification'>('overview');
+export const BusinessDashboard: React.FC<Props> = ({
+  currentUser,
+  onNavigate,
+  onLogout,
+  controlledTab,
+  onTabChange,
+}) => {
+  const [internalTab, setInternalTab] = useState<'overview' | 'projects' | 'create_project' | 'applications' | 'active_work' | 'payments' | 'verification'>('overview');
+  
+  const activeTab = (controlledTab as any) || internalTab;
+  const setActiveTab = (tab: any) => {
+    setInternalTab(tab);
+    if (onTabChange) onTabChange(tab);
+  };
 
   const profile = marketplaceStore.getBusinessProfile(currentUser.id) || {
     userId: currentUser.id,

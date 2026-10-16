@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { User, UserRole } from '../../types';
 import { marketplaceStore } from '../../lib/storage';
 import { StudentRegistrationSchema, BusinessRegistrationSchema } from '../../lib/schemas';
-import { X, GraduationCap, Building2, Shield, AlertCircle, ArrowRight } from 'lucide-react';
+import { X, GraduationCap, Building2, Shield, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
 import { auth, googleAuthProvider } from '../../lib/firebase';
 import { signInWithPopup } from 'firebase/auth';
+import { supabaseService } from '../../lib/supabaseService';
 
 interface Props {
   isOpen: boolean;
@@ -45,7 +46,10 @@ export const AuthModal: React.FC<Props> = ({
   const [bizWebsite, setBizWebsite] = useState('https://');
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  const isLive = supabaseService.isLiveBackendConfigured();
 
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
@@ -70,6 +74,11 @@ export const AuthModal: React.FC<Props> = ({
         };
         marketplaceStore['set']('ptp_users', [appUser, ...users]);
       }
+
+      try {
+        localStorage.setItem('ptp_session_provider', 'firebase');
+      } catch {}
+
       marketplaceStore.setCurrentUserId(appUser.id);
       onSuccess(appUser);
       onClose();
@@ -83,38 +92,85 @@ export const AuthModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    const users = marketplaceStore.getUsers();
-    const user = users.find((u) => u.email.toLowerCase() === loginEmail.toLowerCase());
-    if (!user) {
-      setErrorMsg('No user found with this email. Try quick test accounts below.');
-      return;
+    setIsLoading(true);
+
+    try {
+      if (isLive) {
+        // --- Live Supabase Authentication ---
+        const authResult = await supabaseService.signInWithEmail(loginEmail.trim(), loginPassword);
+        const authUser = authResult?.user;
+        if (!authUser) {
+          throw new Error('Authentication succeeded but no active user session was returned.');
+        }
+
+        // Retrieve authoritative identity from PostgreSQL profiles table
+        const profile = await supabaseService.getProfile(authUser.id);
+        if (!profile) {
+          throw new Error('Account authenticated, but user profile was not found. Please contact support.');
+        }
+
+        if (profile.isSuspended) {
+          await supabaseService.signOut();
+          throw new Error(`Account is suspended: ${profile.suspensionReason || 'Policy review'}`);
+        }
+
+        try {
+          localStorage.setItem('ptp_session_provider', 'supabase');
+        } catch {}
+
+        marketplaceStore.setCurrentUserId(profile.id);
+        onSuccess(profile);
+        onClose();
+      } else {
+        // --- Offline / Demo Sandbox Authentication ---
+        if (import.meta.env.PROD) {
+          throw new Error('Live database backend is not configured for production deployment.');
+        }
+
+        const users = marketplaceStore.getUsers();
+        const user = users.find((u) => u.email.toLowerCase() === loginEmail.trim().toLowerCase());
+        if (!user) {
+          setErrorMsg('No user found with this email. In demo mode, select a test account below.');
+          return;
+        }
+        if (user.isSuspended) {
+          setErrorMsg(`Account is suspended: ${user.suspensionReason || 'Policy review'}`);
+          return;
+        }
+
+        try {
+          localStorage.setItem('ptp_session_provider', 'demo');
+        } catch {}
+
+        marketplaceStore.setCurrentUserId(user.id);
+        onSuccess(user);
+        onClose();
+      }
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setErrorMsg(err.message || 'Invalid email or password.');
+    } finally {
+      setIsLoading(false);
     }
-    if (user.isSuspended) {
-      setErrorMsg(`Account is suspended: ${user.suspensionReason || 'Policy review'}`);
-      return;
-    }
-    marketplaceStore.setCurrentUserId(user.id);
-    onSuccess(user);
-    onClose();
   };
 
-  const handleRegisterStudent = (e: React.FormEvent) => {
+  const handleRegisterStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
     const skillsArray = studentSkills.split(',').map((s) => s.trim()).filter(Boolean);
 
     const validation = StudentRegistrationSchema.safeParse({
-      name: studentName,
-      email: studentEmail,
+      name: studentName.trim(),
+      email: studentEmail.trim(),
       password: studentPassword,
       age: Number(studentAge),
-      city: studentCity,
-      college: studentCollege,
-      headline: studentHeadline,
+      city: studentCity.trim(),
+      college: studentCollege.trim(),
+      headline: studentHeadline.trim(),
       skills: skillsArray,
       experienceLevel: 'INTERMEDIATE',
     });
@@ -124,50 +180,118 @@ export const AuthModal: React.FC<Props> = ({
       return;
     }
 
-    const newUser: User = {
-      id: `student-${Date.now()}`,
-      name: studentName,
-      email: studentEmail,
-      role: 'STUDENT',
-      city: studentCity,
-      createdAt: new Date().toISOString(),
-    };
+    setIsLoading(true);
 
-    const users = marketplaceStore.getUsers();
-    marketplaceStore['set']('ptp_users', [newUser, ...users]);
+    try {
+      if (isLive) {
+        // --- Live Supabase Registration ---
+        const authData = await supabaseService.signUpWithEmail(
+          studentEmail.trim(),
+          studentPassword,
+          { name: studentName.trim(), role: 'STUDENT' }
+        );
 
-    marketplaceStore.updateStudentProfile(newUser.id, {
-      userId: newUser.id,
-      headline: studentHeadline,
-      bio: `Student at ${studentCollege}`,
-      age: Number(studentAge),
-      college: studentCollege,
-      skills: skillsArray,
-      experienceLevel: 'INTERMEDIATE',
-      portfolioLinks: [],
-      totalEarnedINR: 0,
-      completedProjectsCount: 0,
-      averageRating: 5.0,
-      verifiedPortfolioSlug: studentName.toLowerCase().replace(/\s+/g, '-'),
-    });
+        const newUserId = authData?.user?.id;
+        if (!newUserId) {
+          throw new Error('Registration failed: no user identifier returned from Supabase.');
+        }
 
-    marketplaceStore.setCurrentUserId(newUser.id);
-    onSuccess(newUser);
-    onClose();
+        const slug = studentName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
+        await supabaseService.updateStudentProfile(newUserId, {
+          headline: studentHeadline.trim(),
+          bio: studentCollege ? `Student at ${studentCollege.trim()}` : '',
+          age: Number(studentAge),
+          college: studentCollege.trim(),
+          skills: skillsArray,
+          experienceLevel: 'INTERMEDIATE',
+          portfolioLinks: [],
+          verifiedPortfolioSlug: slug,
+        });
+
+        const profile = await supabaseService.getProfile(newUserId);
+        const userObj: User = profile || {
+          id: newUserId,
+          name: studentName.trim(),
+          email: studentEmail.trim(),
+          role: 'STUDENT',
+          city: studentCity.trim(),
+          createdAt: new Date().toISOString(),
+        };
+
+        try {
+          localStorage.setItem('ptp_session_provider', 'supabase');
+        } catch {}
+
+        marketplaceStore.setCurrentUserId(userObj.id);
+        onSuccess(userObj);
+        onClose();
+      } else {
+        // --- Offline / Demo Sandbox Registration ---
+        if (import.meta.env.PROD) {
+          throw new Error('Live database backend is not configured for production deployment.');
+        }
+
+        const users = marketplaceStore.getUsers();
+        const emailExists = users.some((u) => u.email.toLowerCase() === studentEmail.trim().toLowerCase());
+        if (emailExists) {
+          setErrorMsg('An account with this email address already exists. Please sign in instead.');
+          return;
+        }
+
+        const newUser: User = {
+          id: `student-${Date.now()}`,
+          name: studentName.trim(),
+          email: studentEmail.trim(),
+          role: 'STUDENT', // Guaranteed student role
+          city: studentCity.trim(),
+          createdAt: new Date().toISOString(),
+        };
+
+        marketplaceStore['set']('ptp_users', [newUser, ...users]);
+
+        marketplaceStore.updateStudentProfile(newUser.id, {
+          userId: newUser.id,
+          headline: studentHeadline.trim(),
+          bio: studentCollege ? `Student at ${studentCollege.trim()}` : '',
+          age: Number(studentAge),
+          college: studentCollege.trim(),
+          skills: skillsArray,
+          experienceLevel: 'INTERMEDIATE',
+          portfolioLinks: [],
+          totalEarnedINR: 0,
+          completedProjectsCount: 0,
+          averageRating: 5.0,
+          verifiedPortfolioSlug: studentName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-'),
+        });
+
+        try {
+          localStorage.setItem('ptp_session_provider', 'demo');
+        } catch {}
+
+        marketplaceStore.setCurrentUserId(newUser.id);
+        onSuccess(newUser);
+        onClose();
+      }
+    } catch (err: any) {
+      console.error('Student registration error:', err);
+      setErrorMsg(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleRegisterBusiness = (e: React.FormEvent) => {
+  const handleRegisterBusiness = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
     const validation = BusinessRegistrationSchema.safeParse({
-      name: bizRepName,
-      email: bizEmail,
+      name: bizRepName.trim(),
+      email: bizEmail.trim(),
       password: bizPassword,
-      companyName: bizCompanyName,
-      industry: bizIndustry,
-      city: bizCity,
-      website: bizWebsite !== 'https://' ? bizWebsite : '',
+      companyName: bizCompanyName.trim(),
+      industry: bizIndustry.trim(),
+      city: bizCity.trim(),
+      website: bizWebsite !== 'https://' ? bizWebsite.trim() : '',
     });
 
     if (!validation.success) {
@@ -175,39 +299,106 @@ export const AuthModal: React.FC<Props> = ({
       return;
     }
 
-    const newUser: User = {
-      id: `business-${Date.now()}`,
-      name: bizRepName,
-      email: bizEmail,
-      role: 'BUSINESS',
-      city: bizCity,
-      createdAt: new Date().toISOString(),
-    };
+    setIsLoading(true);
 
-    const users = marketplaceStore.getUsers();
-    marketplaceStore['set']('ptp_users', [newUser, ...users]);
+    try {
+      if (isLive) {
+        // --- Live Supabase Registration ---
+        const authData = await supabaseService.signUpWithEmail(
+          bizEmail.trim(),
+          bizPassword,
+          { name: bizRepName.trim(), role: 'BUSINESS' }
+        );
 
-    marketplaceStore.updateBusinessProfile(newUser.id, {
-      userId: newUser.id,
-      companyName: bizCompanyName,
-      industry: bizIndustry,
-      city: bizCity,
-      website: bizWebsite,
-      verificationStatus: 'UNVERIFIED',
-      totalSpentINR: 0,
-      projectsPostedCount: 0,
-    });
+        const newUserId = authData?.user?.id;
+        if (!newUserId) {
+          throw new Error('Registration failed: no user identifier returned from Supabase.');
+        }
 
-    marketplaceStore.setCurrentUserId(newUser.id);
-    onSuccess(newUser);
-    onClose();
+        await supabaseService.updateBusinessProfile(newUserId, {
+          companyName: bizCompanyName.trim(),
+          industry: bizIndustry.trim(),
+          city: bizCity.trim(),
+          website: bizWebsite !== 'https://' ? bizWebsite.trim() : '',
+        });
+
+        const profile = await supabaseService.getProfile(newUserId);
+        const userObj: User = profile || {
+          id: newUserId,
+          name: bizRepName.trim(),
+          email: bizEmail.trim(),
+          role: 'BUSINESS',
+          city: bizCity.trim(),
+          createdAt: new Date().toISOString(),
+        };
+
+        try {
+          localStorage.setItem('ptp_session_provider', 'supabase');
+        } catch {}
+
+        marketplaceStore.setCurrentUserId(userObj.id);
+        onSuccess(userObj);
+        onClose();
+      } else {
+        // --- Offline / Demo Sandbox Registration ---
+        if (import.meta.env.PROD) {
+          throw new Error('Live database backend is not configured for production deployment.');
+        }
+
+        const users = marketplaceStore.getUsers();
+        const emailExists = users.some((u) => u.email.toLowerCase() === bizEmail.trim().toLowerCase());
+        if (emailExists) {
+          setErrorMsg('An account with this email address already exists. Please sign in instead.');
+          return;
+        }
+
+        const newUser: User = {
+          id: `business-${Date.now()}`,
+          name: bizRepName.trim(),
+          email: bizEmail.trim(),
+          role: 'BUSINESS', // Guaranteed business role
+          city: bizCity.trim(),
+          createdAt: new Date().toISOString(),
+        };
+
+        marketplaceStore['set']('ptp_users', [newUser, ...users]);
+
+        marketplaceStore.updateBusinessProfile(newUser.id, {
+          userId: newUser.id,
+          companyName: bizCompanyName.trim(),
+          industry: bizIndustry.trim(),
+          city: bizCity.trim(),
+          website: bizWebsite,
+          verificationStatus: 'UNVERIFIED',
+          totalSpentINR: 0,
+          projectsPostedCount: 0,
+        });
+
+        try {
+          localStorage.setItem('ptp_session_provider', 'demo');
+        } catch {}
+
+        marketplaceStore.setCurrentUserId(newUser.id);
+        onSuccess(newUser);
+        onClose();
+      }
+    } catch (err: any) {
+      console.error('Business registration error:', err);
+      setErrorMsg(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Quick One-Click Demo Login
+  // Quick One-Click Demo Login (Available only in non-production demo mode)
   const handleQuickDemo = (userId: string) => {
+    if (import.meta.env.PROD || isLive) return;
     const users = marketplaceStore.getUsers();
     const user = users.find((u) => u.id === userId);
     if (user) {
+      try {
+        localStorage.setItem('ptp_session_provider', 'demo');
+      } catch {}
       marketplaceStore.setCurrentUserId(user.id);
       onSuccess(user);
       onClose();
@@ -325,9 +516,11 @@ export const AuthModal: React.FC<Props> = ({
 
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm transition"
+              disabled={isLoading}
+              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-xs shadow-sm transition flex items-center justify-center gap-1.5"
             >
-              Sign In to Proof-to-Pay
+              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isLoading ? 'Verifying Credentials...' : 'Sign In to Proof-to-Pay'}</span>
             </button>
           </form>
         )}
@@ -420,9 +613,11 @@ export const AuthModal: React.FC<Props> = ({
 
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition"
+              disabled={isLoading}
+              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5"
             >
-              Create Creator Account (Age 18+ Verified)
+              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isLoading ? 'Creating Creator Account...' : 'Create Creator Account (Age 18+ Verified)'}</span>
             </button>
           </form>
         )}
@@ -502,47 +697,51 @@ export const AuthModal: React.FC<Props> = ({
 
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition"
+              disabled={isLoading}
+              className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5"
             >
-              Register Business Account
+              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isLoading ? 'Registering Business...' : 'Register Business Account'}</span>
             </button>
           </form>
         )}
 
-        {/* Quick Demo Switcher Section */}
-        <div className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800 space-y-2">
-          <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-            ⚡ Quick 1-Click Sandbox Logins:
-          </div>
-          <div className="grid grid-cols-3 gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('student-1')}
-              className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-left hover:scale-[1.02] transition"
-            >
-              <div className="font-bold truncate">Aarav S.</div>
-              <div className="text-[10px] text-emerald-600 dark:text-emerald-400">Student (CS)</div>
-            </button>
+        {/* Quick Demo Switcher Section (Development / Sandbox Demo Mode Only - Never rendered in Production or Live Supabase) */}
+        {!import.meta.env.PROD && !isLive && (
+          <div className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800 space-y-2">
+            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+              ⚡ Quick 1-Click Sandbox Logins (Demo Sandbox Only):
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => handleQuickDemo('student-1')}
+                className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-left hover:scale-[1.02] transition"
+              >
+                <div className="font-bold truncate">Aarav S.</div>
+                <div className="text-[10px] text-emerald-600 dark:text-emerald-400">Student (CS)</div>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('business-1')}
-              className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-left hover:scale-[1.02] transition"
-            >
-              <div className="font-bold truncate">HyperFlow</div>
-              <div className="text-[10px] text-blue-600 dark:text-blue-400">Verified Business</div>
-            </button>
+              <button
+                type="button"
+                onClick={() => handleQuickDemo('business-1')}
+                className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-left hover:scale-[1.02] transition"
+              >
+                <div className="font-bold truncate">HyperFlow</div>
+                <div className="text-[10px] text-blue-600 dark:text-blue-400">Verified Business</div>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('admin-1')}
-              className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300 text-left hover:scale-[1.02] transition"
-            >
-              <div className="font-bold truncate">Admin Roy</div>
-              <div className="text-[10px] text-purple-600 dark:text-purple-400">Super Admin</div>
-            </button>
+              <button
+                type="button"
+                onClick={() => handleQuickDemo('admin-1')}
+                className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300 text-left hover:scale-[1.02] transition"
+              >
+                <div className="font-bold truncate">Admin Roy</div>
+                <div className="text-[10px] text-purple-600 dark:text-purple-400">Super Admin</div>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

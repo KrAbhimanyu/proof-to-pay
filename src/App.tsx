@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { User, ProjectListing } from './types';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, ProjectListing, StudentProfile } from './types';
 import { marketplaceStore } from './lib/storage';
+import { supabaseService } from './lib/supabaseService';
+import { auth } from './lib/firebase';
+import { signOut as firebaseSignOut } from 'firebase/auth';
 import { RoleSwitcher } from './components/common/RoleSwitcher';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
@@ -23,9 +26,21 @@ import { AdminDashboard } from './components/pages/AdminDashboard';
 import { PublicPortfolio } from './components/pages/PublicPortfolio';
 import { HowItWorks } from './components/pages/HowItWorks';
 import { PilotChecklist } from './components/pages/PilotChecklist';
+import { AccessDenied } from './components/pages/AccessDenied';
+import { CreatorWorkspace, CreatorTabId } from './components/layout/CreatorWorkspace';
+import { BusinessWorkspace, BusinessTabId } from './components/layout/BusinessWorkspace';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(marketplaceStore.getCurrentUser());
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    // In production builds with unconfigured backend, never auto-assume demo accounts
+    if (import.meta.env.PROD && !supabaseService.isLiveBackendConfigured()) {
+      return null;
+    }
+    return marketplaceStore.getCurrentUser();
+  });
+  const [isSessionLoading, setIsSessionLoading] = useState<boolean>(true);
+  const isLoggingOutRef = useRef<boolean>(false);
+
   const [activeView, setActiveView] = useState<string>('landing');
   const [viewParam, setViewParam] = useState<string | undefined>(undefined);
   const [isAndroidView, setIsAndroidView] = useState<boolean>(false);
@@ -51,10 +66,121 @@ export default function App() {
   // Load project listings
   const projects = marketplaceStore.getProjects();
 
-  // Navigation handler
+  // Active Workspace tab states for Creator and Business
+  const [creatorTab, setCreatorTab] = useState<CreatorTabId>('overview');
+  const [businessTab, setBusinessTab] = useState<BusinessTabId>('overview');
+
+  // Synchronize session state on initial mount & listen to real auth changes
+  useEffect(() => {
+    let isMounted = true;
+
+    async function initSession() {
+      if (supabaseService.isLiveBackendConfigured()) {
+        try {
+          const session = await supabaseService.getSession();
+          if (session?.user) {
+            const profile = await supabaseService.getProfile(session.user.id);
+            if (isMounted) {
+              if (profile && !profile.isSuspended) {
+                setCurrentUser(profile);
+                marketplaceStore.setCurrentUserId(profile.id);
+              } else {
+                await supabaseService.signOut();
+                setCurrentUser(null);
+                marketplaceStore.setCurrentUserId(null);
+              }
+            }
+          } else {
+            // Live backend configured but no Supabase session active
+            // Clear any stale local user IDs to prevent unauthorized privilege restoration
+            if (isMounted) {
+              setCurrentUser(null);
+              marketplaceStore.setCurrentUserId(null);
+            }
+          }
+        } catch (err) {
+          console.warn('Session restoration note:', err);
+          if (isMounted) {
+            setCurrentUser(null);
+            marketplaceStore.setCurrentUserId(null);
+          }
+        }
+      } else {
+        // Offline / Sandbox Demo Mode
+        if (import.meta.env.PROD) {
+          if (isMounted) {
+            setCurrentUser(null);
+            marketplaceStore.setCurrentUserId(null);
+          }
+        } else {
+          const demoUser = marketplaceStore.getCurrentUser();
+          if (isMounted) {
+            setCurrentUser(demoUser);
+          }
+        }
+      }
+
+      if (isMounted) {
+        setIsSessionLoading(false);
+      }
+    }
+
+    initSession();
+
+    // Subscribe to Supabase auth events when client is present
+    let unsubscribeFn: (() => void) | null = null;
+    const sb = supabaseService.getClient();
+    if (sb) {
+      const { data } = sb.auth.onAuthStateChange(async (event, session) => {
+        if (!isMounted) return;
+
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          if (session?.user) {
+            const profile = await supabaseService.getProfile(session.user.id);
+            if (profile && !profile.isSuspended) {
+              setCurrentUser(profile);
+              marketplaceStore.setCurrentUserId(profile.id);
+            }
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setCurrentUser(null);
+          marketplaceStore.setCurrentUserId(null);
+          setActiveView('landing');
+        }
+      });
+      unsubscribeFn = () => data.subscription.unsubscribe();
+    }
+
+    return () => {
+      isMounted = false;
+      if (unsubscribeFn) {
+        unsubscribeFn();
+      }
+    };
+  }, []);
+
+  // Navigation handler with sub-route support
   const handleNavigate = (view: string, param?: string) => {
-    setActiveView(view);
-    setViewParam(param);
+    if (view === 'creator_dashboard' || view === 'student_dashboard') {
+      setActiveView('student_dashboard');
+      if (param) setCreatorTab(param as CreatorTabId);
+      else setCreatorTab('overview');
+    } else if (view.startsWith('creator_')) {
+      const tab = view.replace('creator_', '') as CreatorTabId;
+      setCreatorTab(tab);
+      setActiveView('student_dashboard');
+    } else if (view === 'business_dashboard') {
+      setActiveView('business_dashboard');
+      if (param) setBusinessTab(param as BusinessTabId);
+      else setBusinessTab('overview');
+    } else if (view.startsWith('business_')) {
+      const tab = view.replace('business_', '') as BusinessTabId;
+      setBusinessTab(tab);
+      setActiveView('business_dashboard');
+    } else {
+      setActiveView(view);
+      setViewParam(param);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -63,11 +189,35 @@ export default function App() {
     setIsAuthOpen(true);
   };
 
-  // Handle Logout
-  const handleLogout = () => {
-    marketplaceStore.setCurrentUserId(null);
+  // Centralized, safe logout handler
+  const handleLogout = async () => {
+    // 1. Prevent duplicate concurrent logout operations
+    if (isLoggingOutRef.current) return;
+    isLoggingOutRef.current = true;
+
+    // Immediately reset client application state to prevent protected views from lingering
     setCurrentUser(null);
+    marketplaceStore.setCurrentUserId(null);
     setActiveView('landing');
+    setViewParam(undefined);
+
+    // 2. Identify active authentication provider and sign out
+    const provider = typeof localStorage !== 'undefined' ? localStorage.getItem('ptp_session_provider') : null;
+
+    try {
+      if (provider === 'supabase' || supabaseService.isLiveBackendConfigured()) {
+        await supabaseService.signOut();
+      } else if (provider === 'firebase') {
+        await firebaseSignOut(auth);
+      }
+    } catch (err) {
+      console.warn('Provider sign-out notification:', err);
+    } finally {
+      try {
+        localStorage.removeItem('ptp_session_provider');
+      } catch {}
+      isLoggingOutRef.current = false;
+    }
   };
 
   // Sync current user state
@@ -126,56 +276,172 @@ export default function App() {
         ) : (
           <div className="p-12 text-center">Project not found</div>
         );
-      case 'student_dashboard': {
-        const studentUser = (currentUser && currentUser.role === 'STUDENT')
-          ? currentUser
-          : (marketplaceStore.getUsers().find((u) => u.role === 'STUDENT') || currentUser);
+      case 'student_dashboard':
+      case 'creator_dashboard': {
+        if (!currentUser) {
+          return (
+            <AccessDenied
+              currentUser={null}
+              targetRole="STUDENT"
+              onNavigate={handleNavigate}
+              onOpenAuth={handleOpenAuth}
+            />
+          );
+        }
 
-        return studentUser ? (
-          <StudentDashboard
-            currentUser={studentUser}
+        if (currentUser.role !== 'STUDENT' && currentUser.role !== 'ADMIN') {
+          return (
+            <AccessDenied
+              currentUser={currentUser}
+              targetRole="STUDENT"
+              onNavigate={handleNavigate}
+              onLogout={handleLogout}
+            />
+          );
+        }
+
+        const studentProfile: StudentProfile = marketplaceStore.getStudentProfile(currentUser.id) || {
+          userId: currentUser.id,
+          headline: 'Emerging Creator',
+          bio: '',
+          age: 20,
+          skills: ['UI/UX', 'React'],
+          experienceLevel: 'INTERMEDIATE',
+          portfolioLinks: [],
+          verifiedPortfolioSlug: currentUser.name.toLowerCase().replace(/\s+/g, '-'),
+          totalEarnedINR: 0,
+          completedProjectsCount: 0,
+          averageRating: 5.0,
+        };
+
+        const pendingOffersCount = marketplaceStore.getOffers().filter(
+          (o) => o.studentId === currentUser.id && o.status === 'PENDING'
+        ).length;
+
+        const activeWorkCount = marketplaceStore.getProjects().filter(
+          (p) => p.selectedStudentId === currentUser.id && p.status === 'IN_PROGRESS'
+        ).length;
+
+        return (
+          <CreatorWorkspace
+            currentUser={currentUser}
+            profile={studentProfile}
+            activeTab={creatorTab}
+            onTabChange={(tab) => setCreatorTab(tab)}
             onNavigate={handleNavigate}
             onLogout={handleLogout}
-          />
-        ) : (
-          <LandingPage
-            projects={projects}
-            currentUser={currentUser}
-            onNavigate={handleNavigate}
-            onOpenAuth={handleOpenAuth}
-          />
+            pendingOffersCount={pendingOffersCount}
+            activeWorkCount={activeWorkCount}
+          >
+            <StudentDashboard
+              currentUser={currentUser}
+              onNavigate={handleNavigate}
+              onLogout={handleLogout}
+              controlledTab={creatorTab === 'browse' ? 'overview' : creatorTab}
+              onTabChange={(tab) => setCreatorTab(tab as any)}
+            />
+          </CreatorWorkspace>
         );
       }
-      case 'business_dashboard':
-        return currentUser ? (
-          <BusinessDashboard
+      case 'business_dashboard': {
+        if (!currentUser) {
+          return (
+            <AccessDenied
+              currentUser={null}
+              targetRole="BUSINESS"
+              onNavigate={handleNavigate}
+              onOpenAuth={handleOpenAuth}
+            />
+          );
+        }
+
+        if (currentUser.role !== 'BUSINESS' && currentUser.role !== 'ADMIN') {
+          return (
+            <AccessDenied
+              currentUser={currentUser}
+              targetRole="BUSINESS"
+              onNavigate={handleNavigate}
+              onLogout={handleLogout}
+            />
+          );
+        }
+
+        const businessProfile = marketplaceStore.getBusinessProfile(currentUser.id) || {
+          userId: currentUser.id,
+          companyName: currentUser.name,
+          industry: 'Software & Technology',
+          city: currentUser.city || 'Bengaluru',
+          verificationStatus: 'UNVERIFIED',
+          totalSpentINR: 0,
+          projectsPostedCount: 0,
+        };
+
+        const businessProjects = marketplaceStore.getProjects().filter(
+          (p) => p.businessId === currentUser.id
+        );
+
+        const pendingReviewsCount = marketplaceStore.getSubmissions().filter((s) => {
+          const p = businessProjects.find((proj) => proj.id === s.projectId);
+          return !!p && p.status === 'SUBMITTED';
+        }).length;
+
+        const applicantsCount = marketplaceStore.getApplications().filter((a) => {
+          const p = businessProjects.find((proj) => proj.id === a.projectId);
+          return !!p && a.status === 'PENDING';
+        }).length;
+
+        return (
+          <BusinessWorkspace
             currentUser={currentUser}
+            profile={businessProfile}
+            activeTab={businessTab}
+            onTabChange={(tab) => setBusinessTab(tab)}
             onNavigate={handleNavigate}
             onLogout={handleLogout}
-          />
-        ) : (
-          <LandingPage
-            projects={projects}
-            currentUser={currentUser}
-            onNavigate={handleNavigate}
-            onOpenAuth={handleOpenAuth}
-          />
+            pendingReviewsCount={pendingReviewsCount}
+            applicantsCount={applicantsCount}
+          >
+            <BusinessDashboard
+              currentUser={currentUser}
+              onNavigate={handleNavigate}
+              onLogout={handleLogout}
+              controlledTab={businessTab}
+              onTabChange={(tab) => setBusinessTab(tab as any)}
+            />
+          </BusinessWorkspace>
         );
-      case 'admin_dashboard':
-        return currentUser ? (
+      }
+      case 'admin_dashboard': {
+        if (!currentUser) {
+          return (
+            <AccessDenied
+              currentUser={null}
+              targetRole="ADMIN"
+              onNavigate={handleNavigate}
+              onOpenAuth={handleOpenAuth}
+            />
+          );
+        }
+
+        if (currentUser.role !== 'ADMIN') {
+          return (
+            <AccessDenied
+              currentUser={currentUser}
+              targetRole="ADMIN"
+              onNavigate={handleNavigate}
+              onLogout={handleLogout}
+            />
+          );
+        }
+
+        return (
           <AdminDashboard
             currentUser={currentUser}
             onNavigate={handleNavigate}
             onLogout={handleLogout}
           />
-        ) : (
-          <LandingPage
-            projects={projects}
-            currentUser={currentUser}
-            onNavigate={handleNavigate}
-            onOpenAuth={handleOpenAuth}
-          />
         );
+      }
       case 'portfolio':
         return (
           <PublicPortfolio
@@ -218,19 +484,37 @@ export default function App() {
     }
   };
 
+  const isWorkspaceView = !isAndroidView && (
+    ((activeView === 'student_dashboard' || activeView === 'creator_dashboard') && (currentUser?.role === 'STUDENT' || currentUser?.role === 'ADMIN')) ||
+    (activeView === 'business_dashboard' && (currentUser?.role === 'BUSINESS' || currentUser?.role === 'ADMIN'))
+  );
+
+  if (isSessionLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-semibold text-slate-400">Verifying session security...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
-      {/* Top Role Sandbox Bar */}
-      <RoleSwitcher
-        currentUser={currentUser}
-        onUserChange={handleUserChange}
-        isAndroidView={isAndroidView}
-        onToggleAndroidView={() => setIsAndroidView(!isAndroidView)}
-        onOpenAndroidGuide={() => {
-          setAndroidGuideTab('compose');
-          setIsAndroidGuideOpen(true);
-        }}
-      />
+      {/* Top Role Sandbox Bar (Development & Sandbox Demo Only - Never rendered in Production) */}
+      {!import.meta.env.PROD && (
+        <RoleSwitcher
+          currentUser={currentUser}
+          onUserChange={handleUserChange}
+          isAndroidView={isAndroidView}
+          onToggleAndroidView={() => setIsAndroidView(!isAndroidView)}
+          onOpenAndroidGuide={() => {
+            setAndroidGuideTab('compose');
+            setIsAndroidGuideOpen(true);
+          }}
+        />
+      )}
 
       {/* Database Connection & Demo Mode Banner */}
       <BackendStatusBanner
@@ -249,7 +533,7 @@ export default function App() {
       {/* Offline Mode Indicator */}
       <OfflineIndicator />
 
-      {/* Main View: Android Frame Mode vs Standard Desktop Web Mode */}
+      {/* Main View: Android Frame Mode vs Workspace Layout vs Standard Public Web Mode */}
       {isAndroidView ? (
         <AndroidShell
           currentUser={currentUser}
@@ -262,6 +546,12 @@ export default function App() {
             {renderContent()}
           </ErrorBoundary>
         </AndroidShell>
+      ) : isWorkspaceView ? (
+        <main className="flex-1 flex flex-col min-w-0">
+          <ErrorBoundary fallbackTitle="Workspace Recovery">
+            {renderContent()}
+          </ErrorBoundary>
+        </main>
       ) : (
         <>
           <Navbar

@@ -95,10 +95,22 @@ export const Navbar: React.FC<Props> = ({
                   else if (currentUser.role === 'BUSINESS') onNavigate('business_dashboard');
                   else if (currentUser.role === 'ADMIN') onNavigate('admin_dashboard');
                 }}
-                className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 shadow-sm transition whitespace-nowrap"
+                className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl shadow-xs transition whitespace-nowrap ${
+                  currentUser.role === 'STUDENT'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    : currentUser.role === 'BUSINESS'
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-purple-600 hover:bg-purple-700 text-white'
+                }`}
               >
                 <UserCircle className="w-4 h-4" />
-                <span className="capitalize">{currentUser.name.split(' ')[0]} ({currentUser.role.toLowerCase()})</span>
+                <span>
+                  {currentUser.role === 'STUDENT'
+                    ? 'Creator Workspace'
+                    : currentUser.role === 'BUSINESS'
+                    ? 'Business Portal'
+                    : 'Admin Portal'}
+                </span>
               </button>
 
               <button

@@ -19,11 +19,26 @@ export const RoleSwitcher: React.FC<Props> = ({
   onToggleAndroidView,
   onOpenAndroidGuide,
 }) => {
+  // CRITICAL SECURITY ENFORCEMENT:
+  // RoleSwitcher is an internal development sandbox tool for local UI testing.
+  // It MUST NEVER render in production builds or permit arbitrary role spoofing.
+  if (import.meta.env.PROD) {
+    return null;
+  }
+
   const [isOpen, setIsOpen] = useState(false);
 
-  const users = marketplaceStore.getUsers();
+  // In live Supabase mode, local admin spoofing is completely disabled.
+  const isLive = isSupabaseConfigured() && !marketplaceStore.isDemoMode();
+  const rawUsers = marketplaceStore.getUsers();
+  const users = isLive ? rawUsers.filter((u) => u.role !== 'ADMIN') : rawUsers;
 
   const handleSelect = (user: User | null) => {
+    // Prevent setting admin identity if live backend is active
+    if (isLive && user?.role === 'ADMIN') {
+      alert('Security violation: Admin identity cannot be assumed via client-side sandbox in live mode.');
+      return;
+    }
     marketplaceStore.setCurrentUserId(user ? user.id : null);
     onUserChange(user);
     setIsOpen(false);
