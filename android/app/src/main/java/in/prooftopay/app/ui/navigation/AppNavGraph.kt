@@ -47,6 +47,7 @@ fun AppNavGraph(
                         when (currentUser?.role) {
                             UserRole.STUDENT -> navController.navigate(Screen.CreatorHome.route) { popUpTo(0) }
                             UserRole.BUSINESS -> navController.navigate(Screen.BusinessHome.route) { popUpTo(0) }
+                            UserRole.RECRUITER -> navController.navigate(Screen.RecruiterHome.route) { popUpTo(0) }
                             UserRole.ADMIN -> navController.navigate(Screen.AdminHome.route) { popUpTo(0) }
                             else -> navController.navigate(Screen.Onboarding.route) { popUpTo(0) }
                         }
@@ -75,6 +76,7 @@ fun AppNavGraph(
                         UserRole.STUDENT -> navController.navigate(Screen.CreatorHome.route) { popUpTo(0) }
                         UserRole.BUSINESS -> navController.navigate(Screen.BusinessHome.route) { popUpTo(0) }
                         UserRole.ADMIN -> navController.navigate(Screen.AdminHome.route) { popUpTo(0) }
+                        UserRole.RECRUITER -> navController.navigate(Screen.RecruiterHome.route) { popUpTo(0) }
                         else -> navController.navigate(Screen.CreatorHome.route) { popUpTo(0) }
                     }
                 },
@@ -91,6 +93,7 @@ fun AppNavGraph(
                         UserRole.STUDENT -> navController.navigate(Screen.CreatorHome.route) { popUpTo(0) }
                         UserRole.BUSINESS -> navController.navigate(Screen.BusinessHome.route) { popUpTo(0) }
                         UserRole.ADMIN -> navController.navigate(Screen.AdminHome.route) { popUpTo(0) }
+                        UserRole.RECRUITER -> navController.navigate(Screen.RecruiterHome.route) { popUpTo(0) }
                         else -> navController.navigate(Screen.CreatorHome.route) { popUpTo(0) }
                     }
                 },
@@ -286,6 +289,19 @@ fun AppNavGraph(
                 AdminHomeScreen(
                     currentUser = currentUser!!,
                     adminViewModel = adminViewModel,
+                    onLogout = {
+                        authViewModel.logout()
+                        navController.navigate(Screen.Login.route) { popUpTo(0) }
+                    }
+                )
+            }
+        }
+
+        // Recruiter Destination Flow
+        composable(Screen.RecruiterHome.route) {
+            if (currentUser != null) {
+                in.prooftopay.app.ui.screens.recruiter.RecruiterHomeScreen(
+                    currentUser = currentUser!!,
                     onLogout = {
                         authViewModel.logout()
                         navController.navigate(Screen.Login.route) { popUpTo(0) }

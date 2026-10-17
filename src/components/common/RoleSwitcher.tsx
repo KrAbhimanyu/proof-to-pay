@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../../types';
 import { marketplaceStore } from '../../lib/storage';
-import { Users, Shield, Building2, GraduationCap, RotateCcw, Smartphone, Monitor, Database } from 'lucide-react';
+import { Users, Shield, Building2, GraduationCap, RotateCcw, Smartphone, Monitor, Database, Briefcase } from 'lucide-react';
 import { isSupabaseConfigured } from '../../lib/supabaseClient';
 
 interface Props {
@@ -58,6 +58,8 @@ export const RoleSwitcher: React.FC<Props> = ({
         return 'bg-purple-100 text-purple-800 border-purple-200';
       case 'BUSINESS':
         return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'RECRUITER':
+        return 'bg-indigo-100 text-indigo-800 border-indigo-200';
       case 'STUDENT':
         return 'bg-emerald-100 text-emerald-800 border-emerald-200';
       default:
@@ -95,6 +97,7 @@ export const RoleSwitcher: React.FC<Props> = ({
             >
               {currentUser?.role === 'STUDENT' && <GraduationCap className="w-3.5 h-3.5 text-emerald-400" />}
               {currentUser?.role === 'BUSINESS' && <Building2 className="w-3.5 h-3.5 text-blue-400" />}
+              {currentUser?.role === 'RECRUITER' && <Briefcase className="w-3.5 h-3.5 text-indigo-400" />}
               {currentUser?.role === 'ADMIN' && <Shield className="w-3.5 h-3.5 text-purple-400" />}
               {!currentUser && <Users className="w-3.5 h-3.5 text-slate-400" />}
               

@@ -7,9 +7,12 @@ import {
   AuditLog,
   BetaFeedback,
   AbuseReport,
-  PlatformFeeStatus
+  PlatformFeeStatus,
+  TalentCollection,
+  StudentProfile
 } from '../../types';
 import { marketplaceStore } from '../../lib/storage';
+import { CuratedCollectionSchema } from '../../lib/schemas';
 import {
   Shield,
   Users,
@@ -35,7 +38,20 @@ import {
   Check,
   Ban,
   ArrowRight,
-  LogOut
+  LogOut,
+  FolderHeart,
+  Award,
+  Star,
+  BookmarkCheck,
+  Plus,
+  Trash2,
+  ExternalLink,
+  Edit3,
+  Layers,
+  Filter,
+  Tag,
+  Share2,
+  Copy
 } from 'lucide-react';
 
 interface Props {
@@ -45,7 +61,7 @@ interface Props {
 }
 
 export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'beta_ops' | 'monetization' | 'verifications' | 'projects' | 'disputes' | 'users' | 'audit_logs' | 'tests'>('monetization');
+  const [activeTab, setActiveTab] = useState<'overview' | 'beta_ops' | 'monetization' | 'curated_collections' | 'verifications' | 'projects' | 'disputes' | 'users' | 'audit_logs' | 'tests'>('monetization');
 
   const users = marketplaceStore.getUsers();
   const projects = marketplaceStore.getProjects();
@@ -57,6 +73,27 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLog
   const monetizationMetrics = marketplaceStore.getMonetizationMetrics();
   const monetizationConfig = marketplaceStore.getMonetizationConfig();
   const commissions = marketplaceStore.getPlatformCommissions();
+  const curatedCollections = marketplaceStore.getCuratedCollections();
+
+  // Curated Collections Admin state
+  const [isCreateCuratedModalOpen, setIsCreateCuratedModalOpen] = useState(false);
+  const [newCuratedName, setNewCuratedName] = useState('');
+  const [newCuratedDesc, setNewCuratedDesc] = useState('');
+  const [newCuratedCategory, setNewCuratedCategory] = useState('Fullstack Engineering');
+  const [newCuratedBadge, setNewCuratedBadge] = useState('Staff Pick');
+  const [newCuratedColor, setNewCuratedColor] = useState<'indigo' | 'emerald' | 'blue' | 'purple' | 'amber' | 'rose'>('indigo');
+  const [newCuratedIsFeatured, setNewCuratedIsFeatured] = useState(true);
+  const [newCuratedCuratorName, setNewCuratedCuratorName] = useState('Proof-to-Pay Editorial');
+  const [curatedError, setCuratedError] = useState<string | null>(null);
+  const [curatedSuccessMsg, setCuratedSuccessMsg] = useState<string | null>(null);
+  const [activeExpandedCuratedId, setActiveExpandedCuratedId] = useState<string | null>(curatedCollections[0]?.id || null);
+  const [curatedCategoryFilter, setCuratedCategoryFilter] = useState<string>('ALL');
+  const [curatedSearch, setCuratedSearch] = useState<string>('');
+
+  // Endorsing Creator state
+  const [selectedCreatorId, setSelectedCreatorId] = useState<string>('');
+  const [endorsementCommentary, setEndorsementCommentary] = useState<string>('');
+  const [endorsementTagsInput, setEndorsementTagsInput] = useState<string>('');
 
   // Monetization filters state
   const [commissionStatusFilter, setCommissionStatusFilter] = useState<PlatformFeeStatus | 'ALL'>('ALL');
@@ -352,6 +389,110 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLog
     }
   };
 
+  // --- Admin-Curated Collections Handlers (Phase C) ---
+  const handleCreateCuratedCollection = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCuratedError(null);
+
+    const validation = CuratedCollectionSchema.safeParse({
+      name: newCuratedName.trim(),
+      description: newCuratedDesc.trim(),
+      category: newCuratedCategory.trim(),
+      badge: newCuratedBadge.trim(),
+      color: newCuratedColor,
+      curatorName: newCuratedCuratorName.trim(),
+      isFeatured: newCuratedIsFeatured,
+    });
+
+    if (!validation.success) {
+      setCuratedError(validation.error.issues[0]?.message || 'Validation error');
+      return;
+    }
+
+    try {
+      const created = marketplaceStore.createCuratedCollection(currentUser, {
+        name: newCuratedName,
+        description: newCuratedDesc,
+        category: newCuratedCategory,
+        badge: newCuratedBadge,
+        color: newCuratedColor,
+        curatorName: newCuratedCuratorName,
+        isFeatured: newCuratedIsFeatured,
+      });
+
+      setCuratedSuccessMsg(`Published curated collection "${created.name}" successfully!`);
+      setIsCreateCuratedModalOpen(false);
+      setNewCuratedName('');
+      setNewCuratedDesc('');
+      setActiveExpandedCuratedId(created.id);
+      setTimeout(() => setCuratedSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setCuratedError(err.message || 'Failed to create curated collection');
+    }
+  };
+
+  const handleToggleCuratedFeatured = (collectionId: string) => {
+    try {
+      marketplaceStore.toggleCuratedFeatured(currentUser, collectionId);
+      window.location.reload();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleDeleteCuratedCollection = (collectionId: string, name: string) => {
+    if (window.confirm(`Are you sure you want to permanently delete the curated collection "${name}"?`)) {
+      try {
+        marketplaceStore.deleteCuratedCollection(currentUser, collectionId);
+        window.location.reload();
+      } catch (err: any) {
+        alert(err.message);
+      }
+    }
+  };
+
+  const handleAddCreatorToCurated = (collectionId: string) => {
+    if (!selectedCreatorId) {
+      alert('Please select a creator to endorse.');
+      return;
+    }
+
+    try {
+      const tags = endorsementTagsInput
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      marketplaceStore.addCreatorToCuratedCollection(
+        currentUser,
+        collectionId,
+        selectedCreatorId,
+        endorsementCommentary.trim() || undefined,
+        tags.length > 0 ? tags : undefined
+      );
+
+      setSelectedCreatorId('');
+      setEndorsementCommentary('');
+      setEndorsementTagsInput('');
+      setCuratedSuccessMsg('Creator endorsed and added to curated cohort!');
+      setTimeout(() => setCuratedSuccessMsg(null), 3000);
+      window.location.reload();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleRemoveCreatorFromCurated = (collectionId: string, creatorId: string, creatorName: string) => {
+    if (window.confirm(`Remove ${creatorName} from this curated cohort?`)) {
+      try {
+        marketplaceStore.removeCreatorFromCuratedCollection(currentUser, collectionId, creatorId);
+        window.location.reload();
+      } catch (err: any) {
+        alert(err.message);
+      }
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
       {/* Header */}
@@ -427,6 +568,18 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLog
               Awaiting Audit
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('curated_collections')}
+          className={`pb-3 px-2 border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === 'curated_collections'
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <FolderHeart className="w-3.5 h-3.5 text-indigo-500" />
+          <span>Curated Cohorts ({curatedCollections.length})</span>
         </button>
 
         <button
@@ -837,6 +990,620 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLog
               );
             })()}
           </div>
+        </div>
+      )}
+
+      {/* Tab: Admin-Curated Talent Collections (Phase C) */}
+      {activeTab === 'curated_collections' && (
+        <div className="space-y-8">
+          {/* Header Banner */}
+          <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-purple-950 rounded-3xl p-6 sm:p-8 border border-indigo-500/30 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-xl">
+            <div className="space-y-2 max-w-2xl">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-bold text-xs border border-indigo-500/30 flex items-center gap-1.5">
+                  <FolderHeart className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Phase C: Official Platform Showcases</span>
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
+                  Recruiter Visible
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black">Admin-Curated Talent Collections</h2>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Hand-vetted talent cohorts curated and published by platform administrators. Curated cohorts appear prominently across Recruiter Discovery and Verified Creator directories with official Staff Pick badges, verified metrics, and curator endorsement commentary.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setIsCreateCuratedModalOpen(true)}
+              className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs transition flex items-center gap-2 shrink-0 shadow-lg shadow-indigo-600/30"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Curated Cohort</span>
+            </button>
+          </div>
+
+          {/* Feedback Notices */}
+          {curatedSuccessMsg && (
+            <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              <span>{curatedSuccessMsg}</span>
+            </div>
+          )}
+
+          {curatedError && (
+            <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+              <span>{curatedError}</span>
+            </div>
+          )}
+
+          {/* Metrics Overview Cards */}
+          {(() => {
+            const totalCurated = curatedCollections.length;
+            const featuredCount = curatedCollections.filter((c) => c.isFeatured).length;
+            const totalEndorsedCreators = curatedCollections.reduce((acc, c) => acc + c.items.length, 0);
+            const totalClones = curatedCollections.reduce((acc, c) => acc + (c.clonesCount || 0), 0);
+
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Curated Cohorts</span>
+                  <div className="text-2xl font-black text-slate-900 dark:text-white mt-1 flex items-center gap-2">
+                    <FolderHeart className="w-6 h-6 text-indigo-500" />
+                    <span>{totalCurated}</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 mt-0.5 block">Published cohorts</span>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Featured Showcases</span>
+                  <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-2">
+                    <Star className="w-6 h-6 text-amber-500 fill-amber-500" />
+                    <span>{featuredCount}</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 mt-0.5 block">Hero directory placement</span>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Endorsed Placements</span>
+                  <div className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1 flex items-center gap-2">
+                    <Award className="w-6 h-6 text-purple-500" />
+                    <span>{totalEndorsedCreators}</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 mt-0.5 block">Student candidate seats</span>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Recruiter Clones</span>
+                  <div className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-2">
+                    <Copy className="w-6 h-6 text-blue-500" />
+                    <span>{totalClones}</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 mt-0.5 block">Copied into recruiter pipelines</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Filter & Search Bar */}
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search curated cohorts or categories..."
+                value={curatedSearch}
+                onChange={(e) => setCuratedSearch(e.target.value)}
+                className="w-full pl-9 pr-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
+              <span className="text-xs text-slate-400 font-semibold whitespace-nowrap">Category:</span>
+              {['ALL', 'Fullstack Engineering', 'UI/UX Design', 'Mobile Development'].map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setCuratedCategoryFilter(cat)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                    curatedCategoryFilter === cat
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {cat === 'ALL' ? 'All Categories' : cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Curated Cohorts Listing */}
+          {(() => {
+            const filtered = curatedCollections.filter((c) => {
+              if (curatedCategoryFilter !== 'ALL' && c.category !== curatedCategoryFilter) return false;
+              if (curatedSearch.trim()) {
+                const q = curatedSearch.toLowerCase();
+                const matchName = c.name.toLowerCase().includes(q);
+                const matchDesc = c.description.toLowerCase().includes(q);
+                const matchCat = (c.category || '').toLowerCase().includes(q);
+                const matchBadge = (c.badge || '').toLowerCase().includes(q);
+                if (!matchName && !matchDesc && !matchCat && !matchBadge) return false;
+              }
+              return true;
+            });
+
+            if (filtered.length === 0) {
+              return (
+                <div className="p-16 text-center bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 rounded-3xl space-y-4">
+                  <FolderHeart className="w-12 h-12 text-indigo-500 mx-auto" />
+                  <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                    No Curated Cohorts Match Filters
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Create a new curated cohort to hand-pick verified students in engineering, design, or mobile development.
+                  </p>
+                  <button
+                    onClick={() => setIsCreateCuratedModalOpen(true)}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs"
+                  >
+                    Create Curated Cohort
+                  </button>
+                </div>
+              );
+            }
+
+            // Student profiles map for quick lookups
+            const studentProfiles = marketplaceStore.getStudentProfiles();
+            const studentUsers = users.filter((u) => u.role === 'STUDENT');
+
+            return (
+              <div className="space-y-6">
+                {filtered.map((cohort) => {
+                  const isExpanded = activeExpandedCuratedId === cohort.id;
+                  const candidateIds = new Set(cohort.items.map((i) => i.creatorId));
+                  const availableCandidates = studentUsers.filter((u) => !candidateIds.has(u.id));
+
+                  return (
+                    <div
+                      key={cohort.id}
+                      className="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition"
+                    >
+                      {/* Cohort Header Bar */}
+                      <div className="p-6 space-y-4 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* Editorial Badge */}
+                              <span className="px-3 py-1 rounded-full text-xs font-black bg-indigo-100 dark:bg-indigo-950/70 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5">
+                                <Award className="w-3.5 h-3.5 text-indigo-500" />
+                                <span>{cohort.badge || 'Staff Pick'}</span>
+                              </span>
+
+                              {/* Category Pill */}
+                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                {cohort.category || 'General'}
+                              </span>
+
+                              {/* Featured Status Indicator */}
+                              {cohort.isFeatured ? (
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                                  <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                                  <span>Featured on Home & Recruiter Discovery</span>
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-400">
+                                  Standard Showcase
+                                </span>
+                              )}
+                            </div>
+
+                            <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                              {cohort.name}
+                            </h3>
+                            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-3xl">
+                              {cohort.description}
+                            </p>
+
+                            <div className="text-[11px] text-slate-400 flex items-center gap-4 pt-1">
+                              <span>Curated by <strong>{cohort.curatorName || 'Proof-to-Pay Staff'}</strong></span>
+                              <span>·</span>
+                              <span>Updated {new Date(cohort.updatedAt).toLocaleDateString('en-IN')}</span>
+                              <span>·</span>
+                              <span>{cohort.viewsCount || 0} views</span>
+                              <span>·</span>
+                              <span>{cohort.clonesCount || 0} recruiter clones</span>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={() => handleToggleCuratedFeatured(cohort.id)}
+                              title="Toggle featured showcase status"
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
+                                cohort.isFeatured
+                                  ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-100'
+                                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                              }`}
+                            >
+                              <Star className={`w-3.5 h-3.5 ${cohort.isFeatured ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
+                              <span>{cohort.isFeatured ? 'Featured' : 'Make Featured'}</span>
+                            </button>
+
+                            <button
+                              onClick={() => setActiveExpandedCuratedId(isExpanded ? null : cohort.id)}
+                              className="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5"
+                            >
+                              <Users className="w-3.5 h-3.5 text-indigo-500" />
+                              <span>{cohort.items.length} {cohort.items.length === 1 ? 'Creator' : 'Creators'}</span>
+                              <span className="text-[10px] text-slate-400">{isExpanded ? '▲' : '▼'}</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteCuratedCollection(cohort.id, cohort.name)}
+                              title="Delete curated cohort"
+                              className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Expanded Candidates Drawer */}
+                      {isExpanded && (
+                        <div className="p-6 bg-slate-50/60 dark:bg-slate-950/50 space-y-6">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                              <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                              <span>Endorsed Candidates in Cohort ({cohort.items.length})</span>
+                            </h4>
+                            <span className="text-[11px] text-slate-400">
+                              Endorsements are visible to recruiters and clients on public discovery
+                            </span>
+                          </div>
+
+                          {cohort.items.length === 0 ? (
+                            <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                              <p className="text-xs text-slate-500">
+                                No creators currently added to this curated cohort. Use the selector below to endorse student talent.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {cohort.items.map((item) => {
+                                const creatorUser = users.find((u) => u.id === item.creatorId);
+                                const creatorProfile = studentProfiles[item.creatorId];
+
+                                if (!creatorUser) return null;
+
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3 flex flex-col justify-between"
+                                  >
+                                    <div className="space-y-3">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white font-black text-sm flex items-center justify-center shrink-0">
+                                            {creatorUser.name.charAt(0)}
+                                          </div>
+                                          <div>
+                                            <h5 className="font-bold text-sm text-slate-900 dark:text-white">
+                                              {creatorUser.name}
+                                            </h5>
+                                            <p className="text-[11px] text-slate-500">
+                                              {creatorProfile?.college || 'Verified College Creator'} · {creatorProfile?.experienceLevel || 'Intermediate'}
+                                            </p>
+                                          </div>
+                                        </div>
+
+                                        <button
+                                          onClick={() => handleRemoveCreatorFromCurated(cohort.id, item.creatorId, creatorUser.name)}
+                                          title="Remove from curated cohort"
+                                          className="text-slate-400 hover:text-rose-600 p-1 rounded-lg transition"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+
+                                      {/* Verified Performance Stats */}
+                                      <div className="flex items-center gap-3 text-[11px] bg-slate-50 dark:bg-slate-800/60 p-2 rounded-xl">
+                                        <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
+                                          <CheckCircle2 className="w-3 h-3" />
+                                          <span>{creatorProfile?.completedProjectsCount || 1} Completed</span>
+                                        </div>
+                                        <span>·</span>
+                                        <div className="flex items-center gap-1 text-amber-500 font-bold">
+                                          <Star className="w-3 h-3 fill-amber-500" />
+                                          <span>{creatorProfile?.averageRating || 5.0} Rating</span>
+                                        </div>
+                                        <span>·</span>
+                                        <span className="text-slate-500">100% On-time</span>
+                                      </div>
+
+                                      {/* Official Curator Endorsement */}
+                                      {item.endorsement && (
+                                        <div className="p-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 space-y-1">
+                                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-indigo-700 dark:text-indigo-300">
+                                            <Award className="w-3 h-3 text-indigo-500" />
+                                            <span>Curator Endorsement</span>
+                                          </div>
+                                          <p className="text-xs text-slate-700 dark:text-slate-300 italic leading-relaxed">
+                                            "{item.endorsement}"
+                                          </p>
+                                        </div>
+                                      )}
+
+                                      {/* Tags */}
+                                      {item.tags && item.tags.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 pt-1">
+                                          {item.tags.map((t) => (
+                                            <span
+                                              key={t}
+                                              className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                                            >
+                                              #{t}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                      <span className="text-[10px] text-slate-400">
+                                        Added {new Date(item.addedAt).toLocaleDateString('en-IN')}
+                                      </span>
+                                      <button
+                                        onClick={() => onNavigate('portfolio', creatorProfile?.verifiedPortfolioSlug || 'aarav-sharma')}
+                                        className="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline flex items-center gap-1"
+                                      >
+                                        <span>View Verified Portfolio</span>
+                                        <ExternalLink className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* Endorse & Add Creator Section */}
+                          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-indigo-100 dark:border-indigo-900/50 space-y-4">
+                            <h5 className="font-extrabold text-xs uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                              <Plus className="w-4 h-4 text-indigo-600" />
+                              <span>Endorse & Add Student to this Curated Cohort</span>
+                            </h5>
+
+                            {availableCandidates.length === 0 ? (
+                              <p className="text-xs text-slate-400">
+                                All available student creators are already members of this cohort.
+                              </p>
+                            ) : (
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                                      Select Verified Student Creator:
+                                    </label>
+                                    <select
+                                      value={selectedCreatorId}
+                                      onChange={(e) => setSelectedCreatorId(e.target.value)}
+                                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                      <option value="">-- Choose student creator --</option>
+                                      {availableCandidates.map((stud) => {
+                                        const prof = studentProfiles[stud.id];
+                                        return (
+                                          <option key={stud.id} value={stud.id}>
+                                            {stud.name} ({prof?.college || 'Student'} · {prof?.skills.slice(0, 3).join(', ')})
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                                      Custom Tags (comma separated):
+                                    </label>
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. React, Design Systems, Top Delivery"
+                                      value={endorsementTagsInput}
+                                      onChange={(e) => setEndorsementTagsInput(e.target.value)}
+                                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                                    Official Editorial Endorsement Commentary (Visible to Recruiters):
+                                  </label>
+                                  <textarea
+                                    rows={2}
+                                    placeholder="e.g. Demonstrated flawless architectural execution on milestone deliverables with 100% on-time delivery..."
+                                    value={endorsementCommentary}
+                                    onChange={(e) => setEndorsementCommentary(e.target.value)}
+                                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                                  />
+                                </div>
+
+                                <div className="flex justify-end">
+                                  <button
+                                    onClick={() => handleAddCreatorToCurated(cohort.id)}
+                                    disabled={!selectedCreatorId}
+                                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-sm"
+                                  >
+                                    <Award className="w-3.5 h-3.5" />
+                                    <span>Confirm Editorial Endorsement</span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* Modal: Create Curated Collection */}
+          {isCreateCuratedModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+              <div className="w-full max-w-lg rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-8 space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center">
+                      <FolderHeart className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-base text-slate-900 dark:text-white">
+                        Create Curated Talent Cohort
+                      </h3>
+                      <p className="text-xs text-slate-400">Phase C Admin Editorial Showcase</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsCreateCuratedModalOpen(false)}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <XCircle className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreateCuratedCollection} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Cohort Name:
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Top 1% React & Full-Stack Architects"
+                      value={newCuratedName}
+                      onChange={(e) => setNewCuratedName(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Category:
+                      </label>
+                      <select
+                        value={newCuratedCategory}
+                        onChange={(e) => setNewCuratedCategory(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="Fullstack Engineering">Fullstack Engineering</option>
+                        <option value="UI/UX Design">UI/UX Design</option>
+                        <option value="Mobile Development">Mobile Development</option>
+                        <option value="AI / Machine Learning">AI / Machine Learning</option>
+                        <option value="Backend & Cloud">Backend & Cloud</option>
+                        <option value="Campus Stars">Campus Stars</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Editorial Badge:
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Staff Pick, Top 1%, Vetted"
+                        value={newCuratedBadge}
+                        onChange={(e) => setNewCuratedBadge(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Accent Color:
+                      </label>
+                      <select
+                        value={newCuratedColor}
+                        onChange={(e: any) => setNewCuratedColor(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="indigo">Indigo (Tech & Code)</option>
+                        <option value="emerald">Emerald (Design & Product)</option>
+                        <option value="blue">Blue (Mobile & Apps)</option>
+                        <option value="purple">Purple (AI & Data)</option>
+                        <option value="amber">Amber (Fast Turnaround)</option>
+                        <option value="rose">Rose (Top Rated)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Curator Signature:
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Proof-to-Pay Editorial"
+                        value={newCuratedCuratorName}
+                        onChange={(e) => setNewCuratedCuratorName(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Curator Rationale & Description:
+                    </label>
+                    <textarea
+                      rows={3}
+                      required
+                      placeholder="Explain what qualifies creators for this cohort (e.g. verified production code, zero milestone disputes, high test coverage)..."
+                      value={newCuratedDesc}
+                      onChange={(e) => setNewCuratedDesc(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="curatedIsFeatured"
+                      checked={newCuratedIsFeatured}
+                      onChange={(e) => setNewCuratedIsFeatured(e.target.checked)}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                    />
+                    <label htmlFor="curatedIsFeatured" className="text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
+                      Feature on Homepage & Recruiter Discovery (Hero placement)
+                    </label>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsCreateCuratedModalOpen(false)}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition shadow-md shadow-indigo-600/30"
+                    >
+                      Publish Curated Cohort
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -13,7 +13,10 @@ import {
   PlatformCommissionRecord,
   PlatformMonetizationConfig,
   ProofPassportItem,
-  ScopeChangeRequest
+  ScopeChangeRequest,
+  RecruiterProfile,
+  TalentCollection,
+  ReferralRecord
 } from '../types';
 
 export const INITIAL_USERS: User[] = [
@@ -72,6 +75,16 @@ export const INITIAL_USERS: User[] = [
     city: 'Bengaluru',
     state: 'Karnataka',
     createdAt: '2026-06-01T08:00:00.000Z',
+  },
+  {
+    id: 'recruiter-1',
+    name: 'Rhea Sengupta',
+    email: 'rhea.sengupta@talentfoundry.in',
+    role: 'RECRUITER',
+    avatarUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=240&auto=format&fit=crop&q=80',
+    city: 'Bengaluru',
+    state: 'Karnataka',
+    createdAt: '2026-07-20T10:00:00.000Z',
   }
 ];
 
@@ -727,5 +740,191 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
     targetId: 'pay-proj-3',
     details: 'Recorded payment of ₹15,000 INR with UTR-HDFC-992182049182 for project proj-3.',
     timestamp: '2026-09-16T18:30:00.000Z',
+  }
+];
+
+export const INITIAL_RECRUITER_PROFILES: Record<string, RecruiterProfile> = {
+  'recruiter-1': {
+    userId: 'recruiter-1',
+    companyName: 'TalentFoundry Tech Partners',
+    designation: 'Principal Tech Recruiter & Talent Partner',
+    industry: 'Engineering & Product Staffing',
+    verificationStatus: 'VERIFIED',
+    website: 'https://talentfoundry.in',
+    hiringDomains: ['Frontend / React', 'Mobile (Android/iOS)', 'Fullstack', 'UI/UX Design'],
+    totalHiresCount: 14,
+    activeCollectionsCount: 2,
+    referralCode: 'RHEA-TALENT-2026'
+  }
+};
+
+export const INITIAL_TALENT_COLLECTIONS: TalentCollection[] = [
+  // Admin-Curated Collections (Official Platform Showcases)
+  {
+    id: 'curated-col-1',
+    ownerId: 'admin-1',
+    name: 'Top 1% React & Full-Stack Architects',
+    description: 'Vetted student engineers with production-grade TypeScript codebases, flawless milestone execution, and 100% on-time delivery records.',
+    color: 'indigo',
+    category: 'Fullstack Engineering',
+    badge: 'Staff Pick',
+    curatorName: 'Proof-to-Pay Editorial',
+    isCurated: true,
+    isFeatured: true,
+    viewsCount: 342,
+    clonesCount: 18,
+    createdAt: '2026-08-15T09:00:00.000Z',
+    updatedAt: '2026-09-01T12:00:00.000Z',
+    items: [
+      {
+        id: 'curated-item-1',
+        collectionId: 'curated-col-1',
+        creatorId: 'student-1',
+        endorsement: 'Maintained 100% on-time milestone delivery on enterprise telemetry with verified bank UTR clearance and outstanding 5.0 client reviews.',
+        tags: ['React', 'TypeScript', 'Tailwind', 'High Velocity'],
+        addedAt: '2026-08-16T10:00:00.000Z'
+      }
+    ]
+  },
+  {
+    id: 'curated-col-2',
+    ownerId: 'admin-1',
+    name: 'Pixel-Perfect UI/UX & Design Systems',
+    description: 'Designers with rigorous Figma auto-layout discipline, comprehensive token libraries, and verified client product launches.',
+    color: 'emerald',
+    category: 'UI/UX Design',
+    badge: 'Vetted Designers',
+    curatorName: 'Design Review Board',
+    isCurated: true,
+    isFeatured: true,
+    viewsCount: 289,
+    clonesCount: 14,
+    createdAt: '2026-08-18T10:00:00.000Z',
+    updatedAt: '2026-09-02T14:00:00.000Z',
+    items: [
+      {
+        id: 'curated-item-2',
+        collectionId: 'curated-col-2',
+        creatorId: 'student-2',
+        endorsement: 'NID student with extraordinary visual finesse, interactive prototyping speed, and validated design system tokens.',
+        tags: ['Figma', 'Design Systems', 'Mobile UX', 'Micro-interactions'],
+        addedAt: '2026-08-19T11:00:00.000Z'
+      }
+    ]
+  },
+  {
+    id: 'curated-col-3',
+    ownerId: 'admin-1',
+    name: 'High-Velocity Mobile Engineers',
+    description: 'Creators delivering clean Kotlin & Jetpack Compose native architectures with offline-first synchronization.',
+    color: 'blue',
+    category: 'Mobile Development',
+    badge: 'Production Ready',
+    curatorName: 'Engineering Review Team',
+    isCurated: true,
+    isFeatured: false,
+    viewsCount: 165,
+    clonesCount: 9,
+    createdAt: '2026-08-20T11:00:00.000Z',
+    updatedAt: '2026-09-03T16:00:00.000Z',
+    items: [
+      {
+        id: 'curated-item-3',
+        collectionId: 'curated-col-3',
+        creatorId: 'student-1',
+        endorsement: 'Strong proficiency in Kotlin Multiplatform and Compose UI with reliable REST/Supabase client layer integration.',
+        tags: ['Android', 'Kotlin', 'Compose', 'Coroutines'],
+        addedAt: '2026-08-21T12:00:00.000Z'
+      }
+    ]
+  },
+
+  // Recruiter Private Collections
+  {
+    id: 'col-1',
+    ownerId: 'recruiter-1',
+    name: 'Top Fullstack React Engineers',
+    description: 'High-performing creators with verified production deliverables and 5.0 client ratings.',
+    color: 'indigo',
+    createdAt: '2026-08-25T10:00:00.000Z',
+    updatedAt: '2026-09-01T14:30:00.000Z',
+    items: [
+      {
+        id: 'col-item-1',
+        collectionId: 'col-1',
+        creatorId: 'student-1',
+        privateNotes: 'Exceptional TypeScript & React skills. Completed DTU telemetry project on-time with zero scope drift. Ready for high-impact summer contracts.',
+        addedAt: '2026-08-26T11:00:00.000Z',
+        tags: ['React', 'TypeScript', 'Top Delivery']
+      }
+    ]
+  },
+  {
+    id: 'col-2',
+    ownerId: 'recruiter-1',
+    name: 'Mobile & Product Designers',
+    description: 'Curated design talents specialized in design systems and mobile app UX.',
+    color: 'emerald',
+    createdAt: '2026-08-28T12:00:00.000Z',
+    updatedAt: '2026-09-02T16:00:00.000Z',
+    items: [
+      {
+        id: 'col-item-2',
+        collectionId: 'col-2',
+        creatorId: 'student-2',
+        privateNotes: 'NID student with outstanding portfolio pieces. Strong visual design and interactive prototyping.',
+        addedAt: '2026-08-28T12:15:00.000Z',
+        tags: ['Figma', 'Design Systems', 'NID']
+      }
+    ]
+  }
+];
+
+export const INITIAL_REFERRAL_RECORDS: ReferralRecord[] = [
+  {
+    id: 'ref-1',
+    referrerId: 'student-1',
+    referrerRole: 'STUDENT',
+    refereeId: 'student-2',
+    refereeName: 'Ananya Iyer',
+    refereeEmail: 'ananya.iyer@nid.edu',
+    refereeRole: 'STUDENT',
+    status: 'ACTIVE_MILESTONE',
+    rewardAmountINR: 500,
+    rewardType: 'CASH_INR',
+    referralCode: 'AARAV2026',
+    createdAt: '2026-08-20T11:00:00.000Z',
+    activatedAt: '2026-09-05T14:00:00.000Z',
+    milestoneTitle: 'First verified client project completed (₹12,000)'
+  },
+  {
+    id: 'ref-2',
+    referrerId: 'business-1',
+    referrerRole: 'BUSINESS',
+    refereeId: 'business-2',
+    refereeName: 'Kavita Botanicals',
+    refereeEmail: 'kavita@kavitabotanicals.in',
+    refereeRole: 'BUSINESS',
+    status: 'ACTIVE_MILESTONE',
+    rewardAmountINR: 1000,
+    rewardType: 'COMMISSION_DISCOUNT',
+    referralCode: 'SIDDHARTH2026',
+    createdAt: '2026-07-15T10:00:00.000Z',
+    activatedAt: '2026-07-28T16:00:00.000Z',
+    milestoneTitle: 'First project posted and milestone settled'
+  },
+  {
+    id: 'ref-3',
+    referrerId: 'recruiter-1',
+    referrerRole: 'RECRUITER',
+    refereeName: 'Arjun Verma',
+    refereeEmail: 'arjun.verma@techrecruits.co',
+    refereeRole: 'RECRUITER',
+    status: 'SIGNED_UP',
+    rewardAmountINR: 1500,
+    rewardType: 'CASH_INR',
+    referralCode: 'RHEA-TALENT-2026',
+    createdAt: '2026-09-10T09:30:00.000Z',
+    milestoneTitle: 'Signed up via invitation'
   }
 ];

@@ -55,12 +55,28 @@ export const Navbar: React.FC<Props> = ({
             How It Works
           </button>
           <button
+            onClick={() => onNavigate('talent_discovery')}
+            className={`transition hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0 ${
+              activeView === 'talent_discovery' || activeView === 'recruiter_dashboard' ? 'text-indigo-600 dark:text-indigo-400 font-semibold underline underline-offset-8 decoration-2' : ''
+            }`}
+          >
+            Find Talent
+          </button>
+          <button
             onClick={() => onNavigate('portfolio', 'aarav-sharma')}
             className={`transition hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0 ${
               activeView === 'portfolio' ? 'text-indigo-600 dark:text-indigo-400 font-semibold underline underline-offset-8 decoration-2' : ''
             }`}
           >
             Verified Portfolios
+          </button>
+          <button
+            onClick={() => onNavigate('referrals')}
+            className={`transition hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0 ${
+              activeView === 'referrals' ? 'text-indigo-600 dark:text-indigo-400 font-semibold underline underline-offset-8 decoration-2' : ''
+            }`}
+          >
+            Referral Network
           </button>
           <button
             onClick={() => onNavigate('pilot_checklist')}
@@ -93,6 +109,7 @@ export const Navbar: React.FC<Props> = ({
                 onClick={() => {
                   if (currentUser.role === 'STUDENT') onNavigate('student_dashboard');
                   else if (currentUser.role === 'BUSINESS') onNavigate('business_dashboard');
+                  else if (currentUser.role === 'RECRUITER') onNavigate('recruiter_dashboard');
                   else if (currentUser.role === 'ADMIN') onNavigate('admin_dashboard');
                 }}
                 className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl shadow-xs transition whitespace-nowrap ${
@@ -100,6 +117,8 @@ export const Navbar: React.FC<Props> = ({
                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                     : currentUser.role === 'BUSINESS'
                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : currentUser.role === 'RECRUITER'
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
                     : 'bg-purple-600 hover:bg-purple-700 text-white'
                 }`}
               >
@@ -109,6 +128,8 @@ export const Navbar: React.FC<Props> = ({
                     ? 'Creator Workspace'
                     : currentUser.role === 'BUSINESS'
                     ? 'Business Portal'
+                    : currentUser.role === 'RECRUITER'
+                    ? 'Recruiter Portal'
                     : 'Admin Portal'}
                 </span>
               </button>

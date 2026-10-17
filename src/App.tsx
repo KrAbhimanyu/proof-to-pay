@@ -26,7 +26,10 @@ import { AdminDashboard } from './components/pages/AdminDashboard';
 import { PublicPortfolio } from './components/pages/PublicPortfolio';
 import { HowItWorks } from './components/pages/HowItWorks';
 import { PilotChecklist } from './components/pages/PilotChecklist';
+import { HelpCenter } from './components/pages/HelpCenter';
 import { AccessDenied } from './components/pages/AccessDenied';
+import { RecruiterPortal } from './components/pages/RecruiterPortal';
+import { ReferralNetwork } from './components/pages/ReferralNetwork';
 import { CreatorWorkspace, CreatorTabId } from './components/layout/CreatorWorkspace';
 import { BusinessWorkspace, BusinessTabId } from './components/layout/BusinessWorkspace';
 
@@ -49,7 +52,7 @@ export default function App() {
   
   // Auth modal
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register_student' | 'register_business'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'register_student' | 'register_business' | 'register_recruiter'>('login');
 
   // Beta Feedback & Abuse report modals
   const [isFeedbackOpen, setIsFeedbackOpen] = useState<boolean>(false);
@@ -184,7 +187,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleOpenAuth = (mode: 'login' | 'register_student' | 'register_business' = 'login') => {
+  const handleOpenAuth = (mode: 'login' | 'register_student' | 'register_business' | 'register_recruiter' = 'login') => {
     setAuthMode(mode);
     setIsAuthOpen(true);
   };
@@ -229,6 +232,8 @@ export default function App() {
       setActiveView('student_dashboard');
     } else if (user.role === 'BUSINESS') {
       setActiveView('business_dashboard');
+    } else if (user.role === 'RECRUITER') {
+      setActiveView('recruiter_dashboard');
     } else if (user.role === 'ADMIN') {
       setActiveView('admin_dashboard');
     }
@@ -461,6 +466,34 @@ export default function App() {
             onOpenFeedback={() => setIsFeedbackOpen(true)}
           />
         );
+      case 'help_center':
+        return (
+          <HelpCenter
+            onNavigate={handleNavigate}
+            onOpenAuth={handleOpenAuth}
+            currentUser={currentUser}
+          />
+        );
+      case 'recruiter_dashboard':
+      case 'talent_discovery':
+      case 'talent_collections':
+        return (
+          <RecruiterPortal
+            currentUser={currentUser}
+            onNavigate={handleNavigate}
+            onOpenAuth={handleOpenAuth}
+            onLogout={handleLogout}
+          />
+        );
+      case 'referrals':
+      case 'referral_network':
+        return (
+          <ReferralNetwork
+            currentUser={currentUser}
+            onNavigate={handleNavigate}
+            onOpenAuth={handleOpenAuth}
+          />
+        );
       case 'how_it_works':
       case 'about':
       case 'terms':
@@ -486,7 +519,8 @@ export default function App() {
 
   const isWorkspaceView = !isAndroidView && (
     ((activeView === 'student_dashboard' || activeView === 'creator_dashboard') && (currentUser?.role === 'STUDENT' || currentUser?.role === 'ADMIN')) ||
-    (activeView === 'business_dashboard' && (currentUser?.role === 'BUSINESS' || currentUser?.role === 'ADMIN'))
+    (activeView === 'business_dashboard' && (currentUser?.role === 'BUSINESS' || currentUser?.role === 'ADMIN')) ||
+    (activeView === 'recruiter_dashboard' && (currentUser?.role === 'RECRUITER' || currentUser?.role === 'ADMIN'))
   );
 
   if (isSessionLoading) {

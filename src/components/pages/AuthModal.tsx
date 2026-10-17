@@ -9,7 +9,7 @@ import { supabaseService } from '../../lib/supabaseService';
 
 interface Props {
   isOpen: boolean;
-  initialMode: 'login' | 'register_student' | 'register_business';
+  initialMode: 'login' | 'register_student' | 'register_business' | 'register_recruiter';
   onClose: () => void;
   onSuccess: (user: User) => void;
 }
@@ -20,7 +20,7 @@ export const AuthModal: React.FC<Props> = ({
   onClose,
   onSuccess,
 }) => {
-  const [mode, setMode] = useState<'login' | 'register_student' | 'register_business'>(initialMode);
+  const [mode, setMode] = useState<'login' | 'register_student' | 'register_business' | 'register_recruiter'>(initialMode);
   
   // Login fields
   const [loginEmail, setLoginEmail] = useState('');
@@ -35,6 +35,7 @@ export const AuthModal: React.FC<Props> = ({
   const [studentCollege, setStudentCollege] = useState('');
   const [studentHeadline, setStudentHeadline] = useState('');
   const [studentSkills, setStudentSkills] = useState('React, TypeScript, Figma');
+  const [studentReferralCode, setStudentReferralCode] = useState('');
 
   // Business registration fields
   const [bizRepName, setBizRepName] = useState('');
@@ -44,6 +45,17 @@ export const AuthModal: React.FC<Props> = ({
   const [bizIndustry, setBizIndustry] = useState('Technology & SaaS');
   const [bizCity, setBizCity] = useState('');
   const [bizWebsite, setBizWebsite] = useState('https://');
+  const [bizReferralCode, setBizReferralCode] = useState('');
+
+  // Recruiter registration fields
+  const [recruiterName, setRecruiterName] = useState('');
+  const [recruiterEmail, setRecruiterEmail] = useState('');
+  const [recruiterPassword, setRecruiterPassword] = useState('');
+  const [recruiterCompany, setRecruiterCompany] = useState('');
+  const [recruiterDesignation, setRecruiterDesignation] = useState('Senior Technical Recruiter');
+  const [recruiterIndustry, setRecruiterIndustry] = useState('Tech & Product Staffing');
+  const [recruiterHiringDomains, setRecruiterHiringDomains] = useState('Frontend / React, Mobile (Android), UI/UX Design');
+  const [recruiterReferralCode, setRecruiterReferralCode] = useState('');
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [confirmationNotice, setConfirmationNotice] = useState<string | null>(null);
@@ -276,6 +288,10 @@ export const AuthModal: React.FC<Props> = ({
           verifiedPortfolioSlug: studentName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-'),
         });
 
+        if (studentReferralCode.trim()) {
+          marketplaceStore.applyReferralCode(newUser.id, studentReferralCode.trim());
+        }
+
         try {
           localStorage.setItem('ptp_session_provider', 'demo');
         } catch {}
@@ -397,6 +413,10 @@ export const AuthModal: React.FC<Props> = ({
           projectsPostedCount: 0,
         });
 
+        if (bizReferralCode.trim()) {
+          marketplaceStore.applyReferralCode(newUser.id, bizReferralCode.trim());
+        }
+
         try {
           localStorage.setItem('ptp_session_provider', 'demo');
         } catch {}
@@ -407,6 +427,115 @@ export const AuthModal: React.FC<Props> = ({
       }
     } catch (err: any) {
       console.error('Business registration error:', err);
+      setErrorMsg(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRecruiterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+
+    if (!recruiterName.trim() || !recruiterEmail.trim() || !recruiterPassword) {
+      setErrorMsg('Please fill in all required fields.');
+      return;
+    }
+    if (recruiterPassword.length < 8) {
+      setErrorMsg('Password must be at least 8 characters.');
+      return;
+    }
+    if (!recruiterCompany.trim()) {
+      setErrorMsg('Please enter your company or agency name.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      if (isLive) {
+        const authData = await supabaseService.signUpWithEmail(
+          recruiterEmail.trim(),
+          recruiterPassword,
+          { name: recruiterName.trim(), role: 'RECRUITER' }
+        );
+
+        if (!authData?.session) {
+          setConfirmationNotice(
+            `Registration submitted for ${recruiterEmail.trim()}. Please verify your email before logging in to access the Recruiter Portal.`
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        const newUserId = authData.user?.id;
+        if (!newUserId) throw new Error('Registration failed');
+
+        const profile = await supabaseService.getProfile(newUserId);
+        const userObj: User = profile || {
+          id: newUserId,
+          name: recruiterName.trim(),
+          email: recruiterEmail.trim(),
+          role: 'RECRUITER',
+          createdAt: new Date().toISOString(),
+        };
+
+        try {
+          localStorage.setItem('ptp_session_provider', 'supabase');
+        } catch {}
+
+        marketplaceStore.setCurrentUserId(userObj.id);
+        onSuccess(userObj);
+        onClose();
+      } else {
+        if (import.meta.env.PROD) {
+          throw new Error('Live database backend is not configured for production deployment.');
+        }
+
+        const users = marketplaceStore.getUsers();
+        const emailExists = users.some((u) => u.email.toLowerCase() === recruiterEmail.trim().toLowerCase());
+        if (emailExists) {
+          setErrorMsg('An account with this email address already exists. Please sign in instead.');
+          return;
+        }
+
+        const newUser: User = {
+          id: `recruiter-${Date.now()}`,
+          name: recruiterName.trim(),
+          email: recruiterEmail.trim(),
+          role: 'RECRUITER',
+          city: 'Bengaluru',
+          createdAt: new Date().toISOString(),
+        };
+
+        marketplaceStore['set']('ptp_users', [newUser, ...users]);
+
+        marketplaceStore.updateRecruiterProfile(newUser.id, {
+          userId: newUser.id,
+          companyName: recruiterCompany.trim(),
+          designation: recruiterDesignation.trim(),
+          industry: recruiterIndustry.trim(),
+          verificationStatus: 'PENDING',
+          hiringDomains: recruiterHiringDomains.split(',').map((d) => d.trim()).filter(Boolean),
+          totalHiresCount: 0,
+          activeCollectionsCount: 0,
+          referralCode: `REC-${newUser.id.slice(-4).toUpperCase()}`
+        });
+
+        if (recruiterReferralCode.trim()) {
+          marketplaceStore.applyReferralCode(newUser.id, recruiterReferralCode.trim());
+        }
+
+        try {
+          localStorage.setItem('ptp_session_provider', 'demo');
+        } catch {}
+
+        marketplaceStore.setCurrentUserId(newUser.id);
+        onSuccess(newUser);
+        onClose();
+      }
+    } catch (err: any) {
+      console.error('Recruiter registration error:', err);
       setErrorMsg(err.message || 'Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
@@ -439,10 +568,10 @@ export const AuthModal: React.FC<Props> = ({
         </button>
 
         {/* Mode switcher tabs */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 pb-3 mb-6 gap-4 text-xs font-semibold">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 pb-3 mb-6 gap-3 text-xs font-semibold overflow-x-auto">
           <button
             onClick={() => { setMode('login'); setErrorMsg(null); setConfirmationNotice(null); }}
-            className={`pb-1 border-b-2 transition ${
+            className={`pb-1 border-b-2 transition whitespace-nowrap ${
               mode === 'login' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500'
             }`}
           >
@@ -450,19 +579,27 @@ export const AuthModal: React.FC<Props> = ({
           </button>
           <button
             onClick={() => { setMode('register_student'); setErrorMsg(null); setConfirmationNotice(null); }}
-            className={`pb-1 border-b-2 transition ${
+            className={`pb-1 border-b-2 transition whitespace-nowrap ${
               mode === 'register_student' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500'
             }`}
           >
-            Join as Student Creator
+            Student Creator
           </button>
           <button
             onClick={() => { setMode('register_business'); setErrorMsg(null); setConfirmationNotice(null); }}
-            className={`pb-1 border-b-2 transition ${
+            className={`pb-1 border-b-2 transition whitespace-nowrap ${
               mode === 'register_business' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500'
             }`}
           >
-            Hire as Business
+            Business
+          </button>
+          <button
+            onClick={() => { setMode('register_recruiter'); setErrorMsg(null); setConfirmationNotice(null); }}
+            className={`pb-1 border-b-2 transition whitespace-nowrap ${
+              mode === 'register_recruiter' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-bold' : 'border-transparent text-slate-500'
+            }`}
+          >
+            Tech Recruiter
           </button>
         </div>
 
@@ -657,6 +794,19 @@ export const AuthModal: React.FC<Props> = ({
               />
             </div>
 
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Referral Code (Optional)
+              </label>
+              <input
+                type="text"
+                value={studentReferralCode}
+                onChange={(e) => setStudentReferralCode(e.target.value)}
+                placeholder="e.g. AARAV2026 (unlock ₹500 milestone bonus)"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 uppercase font-mono"
+              />
+            </div>
+
             <button
               type="submit"
               disabled={isLoading}
@@ -741,6 +891,19 @@ export const AuthModal: React.FC<Props> = ({
               </div>
             </div>
 
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Referral Code (Optional)
+              </label>
+              <input
+                type="text"
+                value={bizReferralCode}
+                onChange={(e) => setBizReferralCode(e.target.value)}
+                placeholder="e.g. HYPERFLOW26 (unlock 0% fee credit)"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 uppercase font-mono"
+              />
+            </div>
+
             <button
               type="submit"
               disabled={isLoading}
@@ -752,13 +915,112 @@ export const AuthModal: React.FC<Props> = ({
           </form>
         )}
 
+        {/* 4. Register Recruiter */}
+        {mode === 'register_recruiter' && (
+          <form onSubmit={handleRecruiterSubmit} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Name *</label>
+                <input
+                  type="text"
+                  value={recruiterName}
+                  onChange={(e) => setRecruiterName(e.target.value)}
+                  placeholder="e.g. Rhea Sengupta"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Company / Agency *</label>
+                <input
+                  type="text"
+                  value={recruiterCompany}
+                  onChange={(e) => setRecruiterCompany(e.target.value)}
+                  placeholder="e.g. TalentFoundry Partners"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Work Email *</label>
+              <input
+                type="email"
+                value={recruiterEmail}
+                onChange={(e) => setRecruiterEmail(e.target.value)}
+                placeholder="recruiter@agency.com"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Password *</label>
+              <input
+                type="password"
+                value={recruiterPassword}
+                onChange={(e) => setRecruiterPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Designation</label>
+                <input
+                  type="text"
+                  value={recruiterDesignation}
+                  onChange={(e) => setRecruiterDesignation(e.target.value)}
+                  placeholder="e.g. Lead Talent Partner"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Hiring Focus</label>
+                <input
+                  type="text"
+                  value={recruiterHiringDomains}
+                  onChange={(e) => setRecruiterHiringDomains(e.target.value)}
+                  placeholder="e.g. React, Android, UI/UX"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Referral Code (Optional)
+              </label>
+              <input
+                type="text"
+                value={recruiterReferralCode}
+                onChange={(e) => setRecruiterReferralCode(e.target.value)}
+                placeholder="e.g. RHEA-TALENT-2026 (unlock ₹1,500 bonus credit)"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 uppercase font-mono"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5"
+            >
+              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isLoading ? 'Creating Recruiter Account...' : 'Register as Tech Recruiter'}</span>
+            </button>
+          </form>
+        )}
+
         {/* Quick Demo Switcher Section (Development / Sandbox Demo Mode Only - Never rendered in Production or Live Supabase) */}
         {!import.meta.env.PROD && !isLive && (
           <div className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800 space-y-2">
             <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
               ⚡ Quick 1-Click Sandbox Logins (Demo Sandbox Only):
             </div>
-            <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
               <button
                 type="button"
                 onClick={() => handleQuickDemo('student-1')}
@@ -774,7 +1036,16 @@ export const AuthModal: React.FC<Props> = ({
                 className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-left hover:scale-[1.02] transition"
               >
                 <div className="font-bold truncate">HyperFlow</div>
-                <div className="text-[10px] text-blue-600 dark:text-blue-400">Verified Business</div>
+                <div className="text-[10px] text-blue-600 dark:text-blue-400">Business</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickDemo('recruiter-1')}
+                className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-300 text-left hover:scale-[1.02] transition"
+              >
+                <div className="font-bold truncate">Rhea S.</div>
+                <div className="text-[10px] text-indigo-600 dark:text-indigo-400">Recruiter</div>
               </button>
 
               <button

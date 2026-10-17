@@ -7,7 +7,8 @@ import kotlinx.serialization.Serializable
 enum class UserRole {
     @SerialName("STUDENT") STUDENT,
     @SerialName("BUSINESS") BUSINESS,
-    @SerialName("ADMIN") ADMIN
+    @SerialName("ADMIN") ADMIN,
+    @SerialName("RECRUITER") RECRUITER
 }
 
 @Serializable
@@ -325,6 +326,79 @@ data class WorkTrailEvent(
     @SerialName("actor_role") val actorRole: String,
     @SerialName("is_verified") val isVerified: Boolean = false,
     @SerialName("verification_note") val verificationNote: String? = null
+)
+
+@Serializable
+data class RecruiterProfile(
+    @SerialName("user_id") val userId: String,
+    @SerialName("company_name") val companyName: String,
+    val designation: String,
+    val industry: String,
+    @SerialName("verification_status") val verificationStatus: VerificationStatus = VerificationStatus.UNVERIFIED,
+    val website: String? = null,
+    @SerialName("hiring_domains") val hiringDomains: List<String> = emptyList(),
+    @SerialName("total_hires_count") val totalHiresCount: Int = 0,
+    @SerialName("active_collections_count") val activeCollectionsCount: Int = 0,
+    @SerialName("referral_code") val referralCode: String? = null
+)
+
+@Serializable
+data class TalentCollectionItem(
+    val id: String,
+    @SerialName("collection_id") val collectionId: String,
+    @SerialName("creator_id") val creatorId: String,
+    @SerialName("private_notes") val privateNotes: String? = null,
+    @SerialName("added_at") val addedAt: String,
+    val tags: List<String> = emptyList(),
+    val endorsement: String? = null
+)
+
+@Serializable
+data class TalentCollection(
+    val id: String,
+    @SerialName("owner_id") val ownerId: String,
+    val name: String,
+    val description: String,
+    val color: String = "indigo",
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
+    val items: List<TalentCollectionItem> = emptyList(),
+    @SerialName("is_curated") val isCurated: Boolean = false,
+    @SerialName("is_featured") val isFeatured: Boolean = false,
+    val badge: String? = null,
+    @SerialName("curator_name") val curatorName: String? = null,
+    val category: String? = null,
+    @SerialName("views_count") val viewsCount: Int = 0,
+    @SerialName("clones_count") val clonesCount: Int = 0
+)
+
+@Serializable
+data class ReferralRecord(
+    val id: String,
+    @SerialName("referrer_id") val referrerId: String,
+    @SerialName("referrer_role") val referrerRole: UserRole,
+    @SerialName("referee_id") val refereeId: String? = null,
+    @SerialName("referee_name") val refereeName: String,
+    @SerialName("referee_email") val refereeEmail: String,
+    @SerialName("referee_role") val refereeRole: UserRole,
+    val status: String = "SIGNED_UP",
+    @SerialName("reward_amount_inr") val rewardAmountInr: Double,
+    @SerialName("reward_type") val rewardType: String = "CASH_INR",
+    @SerialName("referral_code") val referralCode: String,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("activated_at") val activatedAt: String? = null,
+    @SerialName("milestone_title") val milestoneTitle: String? = null
+)
+
+@Serializable
+data class ReferralStats(
+    @SerialName("referral_code") val referralCode: String,
+    @SerialName("total_invited") val totalInvited: Int = 0,
+    @SerialName("total_joined") val totalJoined: Int = 0,
+    @SerialName("total_activated") val totalActivated: Int = 0,
+    @SerialName("total_earned_inr") val totalEarnedInr: Double = 0.0,
+    @SerialName("pending_reward_inr") val pendingRewardInr: Double = 0.0,
+    @SerialName("commission_discount_percent") val commissionDiscountPercent: Int = 0
 )
 
 

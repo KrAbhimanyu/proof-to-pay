@@ -1,4 +1,4 @@
-export type UserRole = 'STUDENT' | 'BUSINESS' | 'ADMIN';
+export type UserRole = 'STUDENT' | 'BUSINESS' | 'ADMIN' | 'RECRUITER';
 
 export type VerificationStatus = 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
 
@@ -444,7 +444,7 @@ export interface AuditLog {
   actorName: string;
   actorRole: UserRole;
   action: string;
-  targetType: 'PROJECT' | 'USER' | 'PAYMENT' | 'VERIFICATION' | 'DISPUTE';
+  targetType: 'PROJECT' | 'USER' | 'PAYMENT' | 'VERIFICATION' | 'DISPUTE' | 'COLLECTION';
   targetId: string;
   details: string;
   timestamp: string;
@@ -483,6 +483,7 @@ export interface BetaMetricsReport {
   creatorsCount: number;
   businessesCount: number;
   adminsCount: number;
+  recruitersCount?: number;
   totalProjects: number;
   approvedProjectsCount: number;
   draftOrPendingCount: number;
@@ -493,4 +494,78 @@ export interface BetaMetricsReport {
   openDisputesCount: number;
   openAbuseReportsCount: number;
   feedbackCount: number;
+}
+
+// ==========================================
+// RECRUITER PORTAL, TALENT COLLECTIONS & REFERRAL NETWORK TYPES
+// ==========================================
+
+export interface RecruiterProfile {
+  userId: string;
+  companyName: string;
+  designation: string;
+  industry: string;
+  verificationStatus: VerificationStatus;
+  website?: string;
+  hiringDomains: string[];
+  totalHiresCount: number;
+  activeCollectionsCount: number;
+  referralCode?: string;
+}
+
+export interface TalentCollectionItem {
+  id: string;
+  collectionId: string;
+  creatorId: string;
+  privateNotes?: string;
+  addedAt: string;
+  tags?: string[];
+  endorsement?: string; // Public admin curator endorsement/recommendation commentary
+}
+
+export interface TalentCollection {
+  id: string;
+  ownerId: string; // Recruiter, Business, or Admin user ID
+  name: string;
+  description: string;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+  items: TalentCollectionItem[];
+  isCurated?: boolean;       // Platform official admin-curated showcase
+  isFeatured?: boolean;      // Promoted on homepage & recruiter discovery
+  badge?: string;            // e.g. "Staff Pick", "Top 1% Creators", "High Velocity"
+  curatorName?: string;      // e.g. "Proof-to-Pay Staff", "Editorial Board"
+  category?: string;         // e.g. "Fullstack & Backend", "Design Systems", "Mobile"
+  viewsCount?: number;
+  clonesCount?: number;
+}
+
+export type ReferralStatus = 'PENDING' | 'SIGNED_UP' | 'ACTIVE_MILESTONE' | 'REWARDED';
+
+export interface ReferralRecord {
+  id: string;
+  referrerId: string;
+  referrerRole: UserRole;
+  refereeId?: string;
+  refereeName: string;
+  refereeEmail: string;
+  refereeRole: UserRole;
+  status: ReferralStatus;
+  rewardAmountINR: number;
+  rewardType: 'CASH_INR' | 'COMMISSION_DISCOUNT' | 'CREDIT';
+  referralCode: string;
+  createdAt: string;
+  activatedAt?: string;
+  milestoneTitle?: string;
+}
+
+export interface ReferralStats {
+  referralCode: string;
+  totalInvited: number;
+  totalJoined: number;
+  totalActivated: number;
+  totalEarnedINR: number;
+  pendingRewardINR: number;
+  commissionDiscountPercent: number;
 }

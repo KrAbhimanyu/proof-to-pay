@@ -25,7 +25,13 @@ import {
   ScopeChangeRequest,
   WorkTrailEvent,
   WorkTrailEventType,
-  DeliverableItem
+  DeliverableItem,
+  RecruiterProfile,
+  TalentCollection,
+  TalentCollectionItem,
+  ReferralRecord,
+  ReferralStats,
+  ReferralStatus
 } from '../types';
 import {
   INITIAL_USERS,
@@ -42,7 +48,10 @@ import {
   INITIAL_PLATFORM_COMMISSIONS,
   INITIAL_MONETIZATION_CONFIG,
   INITIAL_PROOF_PASSPORT_ITEMS,
-  INITIAL_SCOPE_CHANGE_REQUESTS
+  INITIAL_SCOPE_CHANGE_REQUESTS,
+  INITIAL_RECRUITER_PROFILES,
+  INITIAL_TALENT_COLLECTIONS,
+  INITIAL_REFERRAL_RECORDS
 } from './mockData';
 import { isSupabaseConfigured, getSupabaseConfig } from './supabaseClient';
 
@@ -50,6 +59,9 @@ const STORAGE_KEYS = {
   USERS: 'ptp_users',
   STUDENT_PROFILES: 'ptp_student_profiles',
   BUSINESS_PROFILES: 'ptp_business_profiles',
+  RECRUITER_PROFILES: 'ptp_recruiter_profiles',
+  TALENT_COLLECTIONS: 'ptp_talent_collections',
+  REFERRALS: 'ptp_referrals',
   PROJECTS: 'ptp_projects',
   APPLICATIONS: 'ptp_applications',
   OFFERS: 'ptp_offers',
@@ -156,6 +168,9 @@ class MarketplaceStore {
     this.set(STORAGE_KEYS.USERS, INITIAL_USERS);
     this.set(STORAGE_KEYS.STUDENT_PROFILES, INITIAL_STUDENT_PROFILES);
     this.set(STORAGE_KEYS.BUSINESS_PROFILES, INITIAL_BUSINESS_PROFILES);
+    this.set(STORAGE_KEYS.RECRUITER_PROFILES, INITIAL_RECRUITER_PROFILES);
+    this.set(STORAGE_KEYS.TALENT_COLLECTIONS, INITIAL_TALENT_COLLECTIONS);
+    this.set(STORAGE_KEYS.REFERRALS, INITIAL_REFERRAL_RECORDS);
     this.set(STORAGE_KEYS.PROJECTS, INITIAL_PROJECTS);
     this.set(STORAGE_KEYS.APPLICATIONS, INITIAL_APPLICATIONS);
     this.set(STORAGE_KEYS.OFFERS, INITIAL_OFFERS);
@@ -217,8 +232,12 @@ class MarketplaceStore {
   }
 
   // --- Student Profiles ---
+  public getStudentProfiles(): Record<string, StudentProfile> {
+    return this.get<Record<string, StudentProfile>>(STORAGE_KEYS.STUDENT_PROFILES, INITIAL_STUDENT_PROFILES);
+  }
+
   public getStudentProfile(userId: string): StudentProfile | null {
-    const profiles = this.get<Record<string, StudentProfile>>(STORAGE_KEYS.STUDENT_PROFILES, INITIAL_STUDENT_PROFILES);
+    const profiles = this.getStudentProfiles();
     return profiles[userId] || null;
   }
 
@@ -1797,6 +1816,565 @@ class MarketplaceStore {
   }
 
   // --- Real Beta Metrics Aggregator ---
+  // --- Recruiter Profiles ---
+  public getRecruiterProfiles(): Record<string, RecruiterProfile> {
+    return this.get<Record<string, RecruiterProfile>>(
+      STORAGE_KEYS.RECRUITER_PROFILES,
+      INITIAL_RECRUITER_PROFILES
+    );
+  }
+
+  public getRecruiterProfile(userId: string): RecruiterProfile | null {
+    const profiles = this.getRecruiterProfiles();
+    return profiles[userId] || null;
+  }
+
+  public updateRecruiterProfile(userId: string, updates: Partial<RecruiterProfile>): RecruiterProfile {
+    const profiles = this.getRecruiterProfiles();
+    const existing = profiles[userId] || {
+      userId,
+      companyName: 'Tech Partner Agency',
+      designation: 'Technical Talent Recruiter',
+      industry: 'Technology & Design Staffing',
+      verificationStatus: 'UNVERIFIED',
+      hiringDomains: ['Frontend / React', 'Mobile (Android/iOS)', 'UI/UX Design'],
+      totalHiresCount: 0,
+      activeCollectionsCount: 0,
+      referralCode: `REC-${userId.slice(-4).toUpperCase()}`
+    };
+    const updated: RecruiterProfile = { ...existing, ...updates, userId };
+    profiles[userId] = updated;
+    this.set(STORAGE_KEYS.RECRUITER_PROFILES, profiles);
+    return updated;
+  }
+
+  // --- Talent Collections ---
+  public getTalentCollections(ownerId?: string): TalentCollection[] {
+    const collections = this.get<TalentCollection[]>(
+      STORAGE_KEYS.TALENT_COLLECTIONS,
+      INITIAL_TALENT_COLLECTIONS
+    );
+    if (ownerId) {
+      return collections.filter((c) => c.ownerId === ownerId);
+    }
+    return collections;
+  }
+
+  public getTalentCollection(collectionId: string): TalentCollection | null {
+    const collections = this.getTalentCollections();
+    return collections.find((c) => c.id === collectionId) || null;
+  }
+
+  // --- Admin-Curated Talent Collections (Phase C) ---
+  public getCuratedCollections(featuredOnly?: boolean): TalentCollection[] {
+    const all = this.getTalentCollections();
+    const curated = all.filter((c) => c.isCurated === true);
+    if (featuredOnly) {
+      return curated.filter((c) => c.isFeatured === true);
+    }
+    return curated;
+  }
+
+  public createCuratedCollection(
+    adminUser: User,
+    data: {
+      name: string;
+      description: string;
+      color?: string;
+      category: string;
+      badge?: string;
+      curatorName?: string;
+      isFeatured?: boolean;
+    }
+  ): TalentCollection {
+    if (adminUser.role !== 'ADMIN') {
+      throw new Error('Unauthorized: Only administrators can create curated talent cohorts.');
+    }
+
+    const collections = this.getTalentCollections();
+    const newCollection: TalentCollection = {
+      id: `curated-col-${Date.now()}`,
+      ownerId: adminUser.id,
+      name: data.name.trim(),
+      description: data.description.trim(),
+      color: data.color || 'indigo',
+      category: data.category.trim(),
+      badge: data.badge?.trim() || 'Staff Pick',
+      curatorName: data.curatorName?.trim() || adminUser.name || 'Proof-to-Pay Editorial',
+      isCurated: true,
+      isFeatured: Boolean(data.isFeatured),
+      viewsCount: 0,
+      clonesCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      items: []
+    };
+
+    const updated = [newCollection, ...collections];
+    this.set(STORAGE_KEYS.TALENT_COLLECTIONS, updated);
+    this.logAudit(
+      adminUser,
+      'CREATE_CURATED_COLLECTION',
+      'COLLECTION',
+      newCollection.id,
+      `Published curated talent cohort "${newCollection.name}" (${newCollection.category}) with badge "${newCollection.badge}".`
+    );
+
+    return newCollection;
+  }
+
+  public updateCuratedCollection(
+    adminUser: User,
+    collectionId: string,
+    updates: Partial<TalentCollection>
+  ): TalentCollection {
+    if (adminUser.role !== 'ADMIN') {
+      throw new Error('Unauthorized: Only administrators can modify curated collections.');
+    }
+
+    const collections = this.getTalentCollections();
+    const index = collections.findIndex((c) => c.id === collectionId && c.isCurated === true);
+    if (index === -1) {
+      throw new Error('Curated talent collection not found.');
+    }
+
+    const current = collections[index];
+    const modified: TalentCollection = {
+      ...current,
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+
+    collections[index] = modified;
+    this.set(STORAGE_KEYS.TALENT_COLLECTIONS, collections);
+    this.logAudit(
+      adminUser,
+      'UPDATE_CURATED_COLLECTION',
+      'COLLECTION',
+      collectionId,
+      `Updated curated cohort "${modified.name}" settings.`
+    );
+
+    return modified;
+  }
+
+  public deleteCuratedCollection(adminUser: User, collectionId: string): void {
+    if (adminUser.role !== 'ADMIN') {
+      throw new Error('Unauthorized: Only administrators can delete curated collections.');
+    }
+
+    const collections = this.getTalentCollections();
+    const target = collections.find((c) => c.id === collectionId && c.isCurated === true);
+    if (!target) {
+      throw new Error('Curated collection not found.');
+    }
+
+    const updated = collections.filter((c) => c.id !== collectionId);
+    this.set(STORAGE_KEYS.TALENT_COLLECTIONS, updated);
+    this.logAudit(
+      adminUser,
+      'DELETE_CURATED_COLLECTION',
+      'COLLECTION',
+      collectionId,
+      `Removed curated cohort "${target.name}".`
+    );
+  }
+
+  public toggleCuratedFeatured(adminUser: User, collectionId: string): boolean {
+    if (adminUser.role !== 'ADMIN') {
+      throw new Error('Unauthorized: Only administrators can feature collections.');
+    }
+
+    const collections = this.getTalentCollections();
+    const target = collections.find((c) => c.id === collectionId && c.isCurated === true);
+    if (!target) throw new Error('Curated collection not found.');
+
+    target.isFeatured = !target.isFeatured;
+    target.updatedAt = new Date().toISOString();
+    this.set(STORAGE_KEYS.TALENT_COLLECTIONS, collections);
+    this.logAudit(
+      adminUser,
+      'TOGGLE_FEATURED_COLLECTION',
+      'COLLECTION',
+      collectionId,
+      `Toggled featured status of "${target.name}" to ${target.isFeatured}.`
+    );
+
+    return target.isFeatured;
+  }
+
+  public addCreatorToCuratedCollection(
+    adminUser: User,
+    collectionId: string,
+    creatorId: string,
+    endorsement?: string,
+    tags?: string[]
+  ): TalentCollectionItem {
+    if (adminUser.role !== 'ADMIN') {
+      throw new Error('Unauthorized: Only administrators can endorse creators into curated cohorts.');
+    }
+
+    const collections = this.getTalentCollections();
+    const colIndex = collections.findIndex((c) => c.id === collectionId && c.isCurated === true);
+    if (colIndex === -1) {
+      throw new Error('Curated talent collection not found.');
+    }
+
+    const col = collections[colIndex];
+    const existingIndex = col.items.findIndex((i) => i.creatorId === creatorId);
+    if (existingIndex !== -1) {
+      if (endorsement !== undefined) col.items[existingIndex].endorsement = endorsement;
+      if (tags) col.items[existingIndex].tags = tags;
+      col.updatedAt = new Date().toISOString();
+      collections[colIndex] = col;
+      this.set(STORAGE_KEYS.TALENT_COLLECTIONS, collections);
+      return col.items[existingIndex];
+    }
+
+    const newItem: TalentCollectionItem = {
+      id: `curated-item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      collectionId,
+      creatorId,
+      endorsement: endorsement || '',
+      tags: tags || [],
+      addedAt: new Date().toISOString()
+    };
+
+    col.items.unshift(newItem);
+    col.updatedAt = new Date().toISOString();
+    collections[colIndex] = col;
+    this.set(STORAGE_KEYS.TALENT_COLLECTIONS, collections);
+
+    this.logAudit(
+      adminUser,
+      'ENDORSE_CREATOR_CURATED',
+      'USER',
+      creatorId,
+      `Endorsed creator into curated collection "${col.name}".`
+    );
+
+    return newItem;
+  }
+
+  public removeCreatorFromCuratedCollection(
+    adminUser: User,
+    collectionId: string,
+    creatorId: string
+  ): void {
+    if (adminUser.role !== 'ADMIN') {
+      throw new Error('Unauthorized: Only administrators can remove creators from curated cohorts.');
+    }
+
+    const collections = this.getTalentCollections();
+    const colIndex = collections.findIndex((c) => c.id === collectionId && c.isCurated === true);
+    if (colIndex !== -1) {
+      collections[colIndex].items = collections[colIndex].items.filter(
+        (i) => i.creatorId !== creatorId
+      );
+      collections[colIndex].updatedAt = new Date().toISOString();
+      this.set(STORAGE_KEYS.TALENT_COLLECTIONS, collections);
+      this.logAudit(
+        adminUser,
+        'REMOVE_CREATOR_CURATED',
+        'USER',
+        creatorId,
+        `Removed creator from curated collection "${collections[colIndex].name}".`
+      );
+    }
+  }
+
+  public cloneCuratedCollectionForRecruiter(
+    recruiterId: string,
+    curatedCollectionId: string
+  ): TalentCollection {
+    const curated = this.getTalentCollection(curatedCollectionId);
+    if (!curated || !curated.isCurated) {
+      throw new Error('Curated collection not found.');
+    }
+
+    const collections = this.getTalentCollections();
+    const newCollectionId = `col-${Date.now()}`;
+    const clonedItems: TalentCollectionItem[] = curated.items.map((item) => ({
+      id: `col-item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      collectionId: newCollectionId,
+      creatorId: item.creatorId,
+      privateNotes: item.endorsement ? `[Curator Endorsement]: ${item.endorsement}` : '',
+      tags: item.tags ? [...item.tags] : [],
+      addedAt: new Date().toISOString()
+    }));
+
+    const cloned: TalentCollection = {
+      id: newCollectionId,
+      ownerId: recruiterId,
+      name: `${curated.name} (Copy)`,
+      description: `Cloned from platform curated collection: "${curated.name}". ${curated.description}`,
+      color: curated.color,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      items: clonedItems,
+      isCurated: false
+    };
+
+    // Increment clones count on original
+    curated.clonesCount = (curated.clonesCount || 0) + 1;
+    const curIndex = collections.findIndex((c) => c.id === curatedCollectionId);
+    if (curIndex !== -1) {
+      collections[curIndex] = curated;
+    }
+
+    const updated = [cloned, ...collections];
+    this.set(STORAGE_KEYS.TALENT_COLLECTIONS, updated);
+
+    // Update recruiter active collection count
+    const recProfile = this.getRecruiterProfile(recruiterId);
+    if (recProfile) {
+      this.updateRecruiterProfile(recruiterId, {
+        activeCollectionsCount: updated.filter((c) => c.ownerId === recruiterId).length
+      });
+    }
+
+    return cloned;
+  }
+
+  public recordCuratedCollectionView(collectionId: string): void {
+    const collections = this.getTalentCollections();
+    const col = collections.find((c) => c.id === collectionId && c.isCurated === true);
+    if (col) {
+      col.viewsCount = (col.viewsCount || 0) + 1;
+      this.set(STORAGE_KEYS.TALENT_COLLECTIONS, collections);
+    }
+  }
+
+  public createTalentCollection(
+    ownerId: string,
+    name: string,
+    description: string,
+    color: string = 'indigo'
+  ): TalentCollection {
+    const collections = this.getTalentCollections();
+    const newCollection: TalentCollection = {
+      id: `col-${Date.now()}`,
+      ownerId,
+      name: name.trim(),
+      description: description.trim(),
+      color,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      items: []
+    };
+    const updated = [newCollection, ...collections];
+    this.set(STORAGE_KEYS.TALENT_COLLECTIONS, updated);
+
+    // Update active collections count in recruiter profile if applicable
+    const recProfile = this.getRecruiterProfile(ownerId);
+    if (recProfile) {
+      this.updateRecruiterProfile(ownerId, {
+        activeCollectionsCount: updated.filter((c) => c.ownerId === ownerId).length
+      });
+    }
+
+    return newCollection;
+  }
+
+  public deleteTalentCollection(collectionId: string): void {
+    const collections = this.getTalentCollections();
+    const target = collections.find((c) => c.id === collectionId);
+    const updated = collections.filter((c) => c.id !== collectionId);
+    this.set(STORAGE_KEYS.TALENT_COLLECTIONS, updated);
+    if (target) {
+      const recProfile = this.getRecruiterProfile(target.ownerId);
+      if (recProfile) {
+        this.updateRecruiterProfile(target.ownerId, {
+          activeCollectionsCount: updated.filter((c) => c.ownerId === target.ownerId).length
+        });
+      }
+    }
+  }
+
+  public addCreatorToCollection(
+    collectionId: string,
+    creatorId: string,
+    privateNotes?: string,
+    tags?: string[]
+  ): TalentCollectionItem {
+    const collections = this.getTalentCollections();
+    const colIndex = collections.findIndex((c) => c.id === collectionId);
+    if (colIndex === -1) {
+      throw new Error('Talent collection not found');
+    }
+
+    const col = collections[colIndex];
+    const existingItemIndex = col.items.findIndex((item) => item.creatorId === creatorId);
+    
+    if (existingItemIndex !== -1) {
+      if (privateNotes !== undefined) {
+        col.items[existingItemIndex].privateNotes = privateNotes;
+      }
+      if (tags) {
+        col.items[existingItemIndex].tags = tags;
+      }
+      col.updatedAt = new Date().toISOString();
+      collections[colIndex] = col;
+      this.set(STORAGE_KEYS.TALENT_COLLECTIONS, collections);
+      return col.items[existingItemIndex];
+    }
+
+    const newItem: TalentCollectionItem = {
+      id: `col-item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      collectionId,
+      creatorId,
+      privateNotes: privateNotes || '',
+      addedAt: new Date().toISOString(),
+      tags: tags || []
+    };
+
+    col.items.unshift(newItem);
+    col.updatedAt = new Date().toISOString();
+    collections[colIndex] = col;
+    this.set(STORAGE_KEYS.TALENT_COLLECTIONS, collections);
+    return newItem;
+  }
+
+  public removeCreatorFromCollection(collectionId: string, creatorId: string): void {
+    const collections = this.getTalentCollections();
+    const colIndex = collections.findIndex((c) => c.id === collectionId);
+    if (colIndex !== -1) {
+      collections[colIndex].items = collections[colIndex].items.filter(
+        (i) => i.creatorId !== creatorId
+      );
+      collections[colIndex].updatedAt = new Date().toISOString();
+      this.set(STORAGE_KEYS.TALENT_COLLECTIONS, collections);
+    }
+  }
+
+  public updateCollectionItemNotes(collectionId: string, creatorId: string, notes: string): void {
+    const collections = this.getTalentCollections();
+    const colIndex = collections.findIndex((c) => c.id === collectionId);
+    if (colIndex !== -1) {
+      const item = collections[colIndex].items.find((i) => i.creatorId === creatorId);
+      if (item) {
+        item.privateNotes = notes;
+        collections[colIndex].updatedAt = new Date().toISOString();
+        this.set(STORAGE_KEYS.TALENT_COLLECTIONS, collections);
+      }
+    }
+  }
+
+  // --- Referral Network ---
+  public getReferrals(userId?: string): ReferralRecord[] {
+    const referrals = this.get<ReferralRecord[]>(
+      STORAGE_KEYS.REFERRALS,
+      INITIAL_REFERRAL_RECORDS
+    );
+    if (userId) {
+      return referrals.filter((r) => r.referrerId === userId);
+    }
+    return referrals;
+  }
+
+  public getReferralCodeForUser(userId: string): string {
+    const users = this.getUsers();
+    const user = users.find((u) => u.id === userId);
+    if (!user) return `PTP-${userId.slice(-4).toUpperCase()}`;
+
+    if (user.role === 'RECRUITER') {
+      const rec = this.getRecruiterProfile(userId);
+      if (rec?.referralCode) return rec.referralCode;
+    }
+
+    const firstName = user.name.trim().split(/\s+/)[0].replace(/[^a-zA-Z]/g, '').toUpperCase();
+    return `${firstName || 'PTP'}2026`;
+  }
+
+  public getReferralStats(userId: string): ReferralStats {
+    const userReferrals = this.getReferrals(userId);
+    const code = this.getReferralCodeForUser(userId);
+
+    const totalInvited = userReferrals.length;
+    const totalJoined = userReferrals.filter((r) => r.status !== 'PENDING').length;
+    const totalActivated = userReferrals.filter(
+      (r) => r.status === 'ACTIVE_MILESTONE' || r.status === 'REWARDED'
+    ).length;
+
+    const totalEarnedINR = userReferrals
+      .filter((r) => r.status === 'ACTIVE_MILESTONE' || r.status === 'REWARDED')
+      .reduce((sum, r) => sum + r.rewardAmountINR, 0);
+
+    const pendingRewardINR = userReferrals
+      .filter((r) => r.status === 'SIGNED_UP')
+      .reduce((sum, r) => sum + r.rewardAmountINR, 0);
+
+    const commissionDiscountPercent = Math.min(10, totalActivated * 2);
+
+    return {
+      referralCode: code,
+      totalInvited,
+      totalJoined,
+      totalActivated,
+      totalEarnedINR,
+      pendingRewardINR,
+      commissionDiscountPercent
+    };
+  }
+
+  public applyReferralCode(newUserId: string, referralCode: string): boolean {
+    const cleanCode = referralCode.trim().toUpperCase();
+    if (!cleanCode) return false;
+
+    const users = this.getUsers();
+    const newUser = users.find((u) => u.id === newUserId);
+    if (!newUser) return false;
+
+    const referrer = users.find(
+      (u) => this.getReferralCodeForUser(u.id) === cleanCode && u.id !== newUserId
+    );
+    if (!referrer) return false;
+
+    const referrals = this.getReferrals();
+    const existing = referrals.find((r) => r.refereeId === newUserId);
+    if (existing) return false;
+
+    let rewardAmount = 500;
+    let rewardType: 'CASH_INR' | 'COMMISSION_DISCOUNT' | 'CREDIT' = 'CASH_INR';
+    if (referrer.role === 'BUSINESS') {
+      rewardAmount = 1000;
+      rewardType = 'COMMISSION_DISCOUNT';
+    } else if (referrer.role === 'RECRUITER') {
+      rewardAmount = 1500;
+      rewardType = 'CASH_INR';
+    }
+
+    const newRecord: ReferralRecord = {
+      id: `ref-${Date.now()}`,
+      referrerId: referrer.id,
+      referrerRole: referrer.role,
+      refereeId: newUserId,
+      refereeName: newUser.name,
+      refereeEmail: newUser.email,
+      refereeRole: newUser.role,
+      status: 'SIGNED_UP',
+      rewardAmountINR: rewardAmount,
+      rewardType,
+      referralCode: cleanCode,
+      createdAt: new Date().toISOString(),
+      milestoneTitle: `Signed up as verified ${newUser.role.toLowerCase()}`
+    };
+
+    this.set(STORAGE_KEYS.REFERRALS, [newRecord, ...referrals]);
+    return true;
+  }
+
+  public recordReferralMilestone(userId: string, milestoneTitle: string): void {
+    const referrals = this.getReferrals();
+    const recordIndex = referrals.findIndex((r) => r.refereeId === userId);
+    if (recordIndex !== -1) {
+      referrals[recordIndex].status = 'ACTIVE_MILESTONE';
+      referrals[recordIndex].activatedAt = new Date().toISOString();
+      referrals[recordIndex].milestoneTitle = milestoneTitle;
+      this.set(STORAGE_KEYS.REFERRALS, referrals);
+    }
+  }
+
   public getBetaMetricsReport(): BetaMetricsReport {
     const users = this.getUsers();
     const projects = this.getProjects();
@@ -1815,6 +2393,7 @@ class MarketplaceStore {
       creatorsCount: users.filter((u) => u.role === 'STUDENT').length,
       businessesCount: users.filter((u) => u.role === 'BUSINESS').length,
       adminsCount: users.filter((u) => u.role === 'ADMIN').length,
+      recruitersCount: users.filter((u) => u.role === 'RECRUITER').length,
       totalProjects: projects.length,
       approvedProjectsCount: projects.filter((p) => p.status === 'APPROVED' || p.status === 'IN_PROGRESS' || p.status === 'COMPLETED').length,
       draftOrPendingCount: projects.filter((p) => p.status === 'DRAFT' || p.status === 'PENDING_REVIEW').length,

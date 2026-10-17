@@ -57,7 +57,22 @@ export const Footer: React.FC<Props> = ({ onNavigate, onOpenAndroidGuide }) => {
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('pilot_checklist')} className="hover:text-white text-emerald-400 font-semibold transition">
+                <button onClick={() => onNavigate('talent_discovery')} className="hover:text-white transition">
+                  Recruiter Portal & Talent Discovery
+                </button>
+              </li>
+              <li>
+                <button onClick={() => onNavigate('referrals')} className="hover:text-white transition">
+                  Referral & Rewards Network
+                </button>
+              </li>
+              <li>
+                <button onClick={() => onNavigate('help_center')} className="hover:text-white text-emerald-400 font-semibold transition">
+                  Help Center & FAQs
+                </button>
+              </li>
+              <li>
+                <button onClick={() => onNavigate('pilot_checklist')} className="hover:text-white transition">
                   Pilot Launch Checklist
                 </button>
               </li>

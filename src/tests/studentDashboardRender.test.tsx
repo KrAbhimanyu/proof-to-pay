@@ -4,6 +4,7 @@ import { renderToString } from 'react-dom/server';
 import { StudentDashboard } from '../components/pages/StudentDashboard';
 import { PaymentHistory } from '../components/common/PaymentHistory';
 import { VerifiedSkills } from '../components/common/VerifiedSkills';
+import { HelpCenter } from '../components/pages/HelpCenter';
 import App from '../App';
 import { marketplaceStore } from '../lib/storage';
 import { User } from '../types';
@@ -91,5 +92,17 @@ describe('StudentDashboard Comprehensive Render Diagnostics', () => {
 
     expect(html).toContain('Sign Out');
   });
+
+  it('renders HelpCenter component with FAQs and troubleshooting steps', () => {
+    const html = renderToString(<HelpCenter onNavigate={() => {}} />);
+    expect(html).toContain('Help Center');
+    expect(html).toContain('Troubleshooting');
+    expect(html).toContain('Creator Quick Resolution Steps');
+    expect(html).toContain('Business Quick Resolution Steps');
+    expect(html).toContain('How do creators get paid');
+    expect(html).toContain('Scope Lock');
+    expect(html).toContain('18+');
+  });
 });
+
 

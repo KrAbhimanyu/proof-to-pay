@@ -37,4 +37,9 @@ sealed class Screen(val route: String) {
     // Admin screens
     object AdminHome : Screen("admin_home")
     object ProjectModeration : Screen("project_moderation")
+
+    // Recruiter & Referral screens
+    object RecruiterHome : Screen("recruiter_home")
+    object TalentCollections : Screen("talent_collections")
+    object ReferralNetwork : Screen("referral_network")
 }

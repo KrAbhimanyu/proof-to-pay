@@ -117,3 +117,30 @@ export const DisputeSubmissionSchema = z.object({
   reason: z.string().min(10, 'State reason for dispute'),
   evidenceNotes: z.string().min(30, 'Detail specific violation of agreed scope or deliverables'),
 });
+
+export const RecruiterRegistrationSchema = z.object({
+  name: z.string().min(2, 'Full name is required'),
+  email: z.string().email('Work email is required'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  companyName: z.string().min(2, 'Company/agency name is required'),
+  designation: z.string().min(2, 'Designation is required'),
+  industry: z.string().min(2, 'Industry is required'),
+  hiringDomains: z.array(z.string()).min(1, 'Select at least one hiring domain'),
+  referralCode: z.string().optional(),
+});
+
+export const TalentCollectionSchema = z.object({
+  name: z.string().min(3, 'Collection name must be at least 3 characters').max(60, 'Collection name too long'),
+  description: z.string().max(300, 'Description too long').optional(),
+  color: z.enum(['indigo', 'emerald', 'blue', 'purple', 'amber', 'rose']).default('indigo'),
+});
+
+export const CuratedCollectionSchema = z.object({
+  name: z.string().min(3, 'Collection name must be at least 3 characters').max(60, 'Name too long'),
+  description: z.string().min(5, 'Provide a curator description').max(300, 'Description too long'),
+  color: z.enum(['indigo', 'emerald', 'blue', 'purple', 'amber', 'rose']).default('indigo'),
+  category: z.string().min(2, 'Category is required'),
+  badge: z.string().min(2, 'Badge label is required').default('Staff Pick'),
+  curatorName: z.string().min(2, 'Curator name is required').default('Proof-to-Pay Editorial'),
+  isFeatured: z.boolean().default(false),
+});
