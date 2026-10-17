@@ -7,6 +7,8 @@ import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 object AuthRepository {
     private val _currentUser = MutableStateFlow<UserProfile?>(
@@ -130,38 +132,61 @@ object AuthRepository {
         ageInput: Int,
         cityInput: String
     ): Result<UserProfile> {
+        if (roleInput == UserRole.ADMIN) {
+            return Result.failure(IllegalArgumentException("Direct registration as ADMIN is strictly prohibited."))
+        }
         if (roleInput == UserRole.STUDENT && ageInput < 18) {
             return Result.failure(IllegalArgumentException("You must be 18 or older to join Proof-to-Pay"))
         }
 
+        val validatedRole = when (roleInput) {
+            UserRole.STUDENT -> UserRole.STUDENT
+            UserRole.BUSINESS -> UserRole.BUSINESS
+            else -> UserRole.STUDENT
+        }
+
         return try {
             if (SupabaseClientProvider.isConfigured) {
+                // Pass validated name and role in GoTrue user metadata so handle_new_user() trigger provisions profiles
                 SupabaseClientProvider.auth.signUpWith(Email) {
-                    email = emailInput
+                    email = emailInput.trim()
                     password = passwordInput
+                    data = buildJsonObject {
+                        put("name", nameInput.trim())
+                        put("role", validatedRole.name)
+                    }
                 }
                 val sessionUser = SupabaseClientProvider.auth.currentUserOrNull()
+                val session = SupabaseClientProvider.auth.currentSessionOrNull()
                 val profile = UserProfile(
                     id = sessionUser?.id ?: "usr-${System.currentTimeMillis()}",
-                    email = emailInput,
-                    name = nameInput,
-                    role = roleInput,
-                    city = cityInput
+                    email = emailInput.trim(),
+                    name = nameInput.trim(),
+                    role = validatedRole,
+                    city = cityInput.trim()
                 )
-                SupabaseClientProvider.postgrest["profiles"].insert(profile)
-                _currentUser.value = profile
-                AuditRepository.log(profile.id, profile.email, "USER_REGISTER", "Registered role: $roleInput")
+
+                // The database trigger 'on_auth_user_created' authoritatively provisions the row in 'public.profiles'
+                // and role-specific profile record ('public.student_profiles' or 'public.business_profiles').
+                // Client-side manual insert into 'profiles' is intentionally removed to avoid RLS policy rejection.
+
+                if (session != null) {
+                    _currentUser.value = profile
+                    AuditRepository.log(profile.id, profile.email, "USER_REGISTER", "Registered role: ${validatedRole.name}")
+                } else {
+                    AuditRepository.log(profile.id, profile.email, "USER_REGISTER_PENDING_CONFIRMATION", "Registered role: ${validatedRole.name} - verification email dispatched")
+                }
                 Result.success(profile)
             } else {
                 val profile = UserProfile(
                     id = "usr-${System.currentTimeMillis()}",
-                    email = emailInput,
-                    name = nameInput,
-                    role = roleInput,
-                    city = cityInput
+                    email = emailInput.trim(),
+                    name = nameInput.trim(),
+                    role = validatedRole,
+                    city = cityInput.trim()
                 )
                 _currentUser.value = profile
-                AuditRepository.log(profile.id, profile.email, "USER_REGISTER", "Registered role: $roleInput")
+                AuditRepository.log(profile.id, profile.email, "USER_REGISTER", "Registered role: ${validatedRole.name}")
                 Result.success(profile)
             }
         } catch (e: Exception) {

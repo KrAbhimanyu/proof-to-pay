@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User, UserRole } from '../../types';
 import { marketplaceStore } from '../../lib/storage';
 import { StudentRegistrationSchema, BusinessRegistrationSchema } from '../../lib/schemas';
-import { X, GraduationCap, Building2, Shield, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { X, GraduationCap, Building2, Shield, AlertCircle, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import { auth, googleAuthProvider } from '../../lib/firebase';
 import { signInWithPopup } from 'firebase/auth';
 import { supabaseService } from '../../lib/supabaseService';
@@ -46,6 +46,7 @@ export const AuthModal: React.FC<Props> = ({
   const [bizWebsite, setBizWebsite] = useState('https://');
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [confirmationNotice, setConfirmationNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
@@ -196,6 +197,17 @@ export const AuthModal: React.FC<Props> = ({
           throw new Error('Registration failed: no user identifier returned from Supabase.');
         }
 
+        // Check if an authenticated session was returned. If email confirmation is required,
+        // GoTrue returns a user object with session: null. Do not attempt authenticated
+        // profile updates or active session navigation until the user confirms their email.
+        if (!authData?.session) {
+          setConfirmationNotice(
+            `Registration submitted for ${studentEmail.trim()}. Please check your email inbox and click the verification link before logging in to access the Creator Workspace.`
+          );
+          setIsLoading(false);
+          return;
+        }
+
         const slug = studentName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
         await supabaseService.updateStudentProfile(newUserId, {
           headline: studentHeadline.trim(),
@@ -315,6 +327,17 @@ export const AuthModal: React.FC<Props> = ({
           throw new Error('Registration failed: no user identifier returned from Supabase.');
         }
 
+        // Check if an authenticated session was returned. If email confirmation is required,
+        // GoTrue returns a user object with session: null. Do not attempt authenticated
+        // profile updates or active session navigation until the user confirms their email.
+        if (!authData?.session) {
+          setConfirmationNotice(
+            `Registration submitted for ${bizEmail.trim()}. Please check your email inbox and click the verification link before logging in to access the Business Workspace.`
+          );
+          setIsLoading(false);
+          return;
+        }
+
         await supabaseService.updateBusinessProfile(newUserId, {
           companyName: bizCompanyName.trim(),
           industry: bizIndustry.trim(),
@@ -418,7 +441,7 @@ export const AuthModal: React.FC<Props> = ({
         {/* Mode switcher tabs */}
         <div className="flex border-b border-slate-200 dark:border-slate-800 pb-3 mb-6 gap-4 text-xs font-semibold">
           <button
-            onClick={() => { setMode('login'); setErrorMsg(null); }}
+            onClick={() => { setMode('login'); setErrorMsg(null); setConfirmationNotice(null); }}
             className={`pb-1 border-b-2 transition ${
               mode === 'login' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500'
             }`}
@@ -426,7 +449,7 @@ export const AuthModal: React.FC<Props> = ({
             Sign In
           </button>
           <button
-            onClick={() => { setMode('register_student'); setErrorMsg(null); }}
+            onClick={() => { setMode('register_student'); setErrorMsg(null); setConfirmationNotice(null); }}
             className={`pb-1 border-b-2 transition ${
               mode === 'register_student' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500'
             }`}
@@ -434,7 +457,7 @@ export const AuthModal: React.FC<Props> = ({
             Join as Student Creator
           </button>
           <button
-            onClick={() => { setMode('register_business'); setErrorMsg(null); }}
+            onClick={() => { setMode('register_business'); setErrorMsg(null); setConfirmationNotice(null); }}
             className={`pb-1 border-b-2 transition ${
               mode === 'register_business' ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold' : 'border-transparent text-slate-500'
             }`}
@@ -442,6 +465,29 @@ export const AuthModal: React.FC<Props> = ({
             Hire as Business
           </button>
         </div>
+
+        {confirmationNotice && (
+          <div className="mb-6 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-sm">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-emerald-900 dark:text-emerald-100 mb-1">Verify Your Email Address</p>
+                <p className="text-xs text-emerald-700 dark:text-emerald-300 leading-relaxed mb-3">{confirmationNotice}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmationNotice(null);
+                    setMode('login');
+                    setErrorMsg(null);
+                  }}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition"
+                >
+                  Proceed to Sign In
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {errorMsg && (
           <div className="mb-4 p-3 rounded-xl bg-rose-50 text-rose-700 text-xs flex items-center gap-2">
