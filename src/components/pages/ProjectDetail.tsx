@@ -20,7 +20,8 @@ import {
   Plus,
   Trash2,
   Lock,
-  X
+  X,
+  MessageSquare
 } from 'lucide-react';
 
 interface Props {
@@ -29,6 +30,12 @@ interface Props {
   onBack: () => void;
   onOpenAuth: (mode?: 'login' | 'register_student') => void;
   onNavigate: (view: string, param?: string) => void;
+  onOpenChat?: (params?: {
+    conversationId?: string;
+    targetUser?: { id: string; name: string; role: 'STUDENT' | 'BUSINESS' | 'ADMIN' | 'RECRUITER' };
+    targetProjectId?: string;
+    targetOfferId?: string;
+  }) => void;
 }
 
 export const ProjectDetail: React.FC<Props> = ({
@@ -37,6 +44,7 @@ export const ProjectDetail: React.FC<Props> = ({
   onBack,
   onOpenAuth,
   onNavigate,
+  onOpenChat,
 }) => {
   const [pitch, setPitch] = useState('');
   const [deliveryDays, setDeliveryDays] = useState(project.deadlineDays);
@@ -331,15 +339,48 @@ export const ProjectDetail: React.FC<Props> = ({
               >
                 Track in Student Dashboard
               </button>
+              {onOpenChat && currentUser && currentUser.id !== project.businessId && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onOpenChat({
+                      targetUser: { id: project.businessId, name: project.businessName, role: 'BUSINESS' },
+                      targetProjectId: project.id
+                    })
+                  }
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-semibold hover:bg-indigo-100 transition shadow-2xs"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Chat with Business</span>
+                </button>
+              )}
             </div>
           ) : (
             /* Application Form */
             <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Apply for this Project</h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Explain your approach and link 1-3 relevant portfolio samples.
-                </p>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Apply for this Project</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Explain your approach and link 1-3 relevant portfolio samples.
+                  </p>
+                </div>
+                {onOpenChat && currentUser && currentUser.id !== project.businessId && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onOpenChat({
+                        targetUser: { id: project.businessId, name: project.businessName, role: 'BUSINESS' },
+                        targetProjectId: project.id
+                      })
+                    }
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-semibold hover:bg-indigo-100 transition whitespace-nowrap shrink-0"
+                    title="Ask business questions before submitting application"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Ask Questions</span>
+                  </button>
+                )}
               </div>
 
               {errorMsg && (

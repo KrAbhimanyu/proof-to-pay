@@ -9,6 +9,7 @@ import { WorkTrail } from '../common/WorkTrail';
 import { PaymentHistory } from '../common/PaymentHistory';
 import { VerifiedSkills } from '../common/VerifiedSkills';
 import { EarningsPerformanceChart } from '../common/EarningsPerformanceChart';
+import { ThemeToggle } from '../common/ThemeToggle';
 import confetti from 'canvas-confetti';
 import {
   GraduationCap,
@@ -43,7 +44,8 @@ import {
   HelpCircle,
   LifeBuoy,
   ArrowRight,
-  LogOut
+  LogOut,
+  MessageSquare
 } from 'lucide-react';
 
 interface Props {
@@ -52,6 +54,12 @@ interface Props {
   onLogout?: () => void;
   controlledTab?: string;
   onTabChange?: (tab: string) => void;
+  onOpenChat?: (params?: {
+    conversationId?: string;
+    targetUser?: { id: string; name: string; role: 'STUDENT' | 'BUSINESS' | 'ADMIN' | 'RECRUITER' };
+    targetProjectId?: string;
+    targetOfferId?: string;
+  }) => void;
 }
 
 export const StudentDashboard: React.FC<Props> = ({
@@ -60,6 +68,7 @@ export const StudentDashboard: React.FC<Props> = ({
   onLogout,
   controlledTab,
   onTabChange,
+  onOpenChat,
 }) => {
   const [internalTab, setInternalTab] = useState<'overview' | 'applications' | 'active_projects' | 'skills' | 'payments' | 'badges' | 'portfolio' | 'profile' | 'settings'>('overview');
   
@@ -974,6 +983,28 @@ export const StudentDashboard: React.FC<Props> = ({
                           <span>Propose Scope Change</span>
                         </button>
                       )}
+
+                      {onOpenChat && (
+                        <button
+                          onClick={() => {
+                            const acceptedOffer = offers.find(
+                              (o) => o.projectId === proj.id && o.studentId === currentUser.id && o.status === 'ACCEPTED'
+                            );
+                            if (acceptedOffer) {
+                              onOpenChat({ targetOfferId: acceptedOffer.id });
+                            } else {
+                              onOpenChat({
+                                targetUser: { id: proj.businessId, name: proj.businessName, role: 'BUSINESS' },
+                                targetProjectId: proj.id
+                              });
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-semibold hover:bg-indigo-100 transition flex items-center gap-1.5 shadow-2xs"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                          <span>Project Chat</span>
+                        </button>
+                      )}
                     </div>
 
                     {/* Pending Scope Change Alert (from Client) */}
@@ -1577,7 +1608,22 @@ export const StudentDashboard: React.FC<Props> = ({
         <div className="max-w-2xl bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-6">
           <div>
             <h2 className="text-base font-bold text-slate-900 dark:text-white">Account Settings & Privacy</h2>
-            <p className="text-xs text-slate-500 mt-1">Manage data retention and account deletion per platform policy.</p>
+            <p className="text-xs text-slate-500 mt-1">Manage appearance, theme preferences, and data privacy.</p>
+          </div>
+
+          {/* Theme & Appearance */}
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-slate-900 dark:text-white text-xs">Appearance & Theme</h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Select Light, Dark, or automatically adapt to your device's System Default.
+                </p>
+              </div>
+            </div>
+            <div className="pt-1">
+              <ThemeToggle variant="segmented" showLabels={true} />
+            </div>
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs space-y-2">

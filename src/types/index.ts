@@ -569,3 +569,88 @@ export interface ReferralStats {
   pendingRewardINR: number;
   commissionDiscountPercent: number;
 }
+
+export interface ReferralLeaderboardEntry {
+  rank: number;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userRole: UserRole;
+  avatarUrl?: string;
+  collegeOrCompany?: string;
+  city?: string;
+  referralCode: string;
+  totalInvited: number;
+  successfulConversions: number;
+  conversionRate: number;
+  totalEarnedINR: number;
+  badge?: string;
+  isCurrentUser?: boolean;
+}
+
+// --- Secure Messaging Subsystem Types ---
+export type ConversationType = 'PRE_PROJECT' | 'PROJECT';
+export type ConversationStatus = 'ACTIVE' | 'ARCHIVED' | 'BLOCKED';
+export type MessageType = 'TEXT' | 'IMAGE' | 'FILE' | 'VOICE' | 'SYSTEM';
+
+export interface ConversationParticipant {
+  id: string;
+  conversationId: string;
+  userId: string;
+  userName?: string;
+  userRole?: UserRole;
+  avatarUrl?: string;
+  joinedAt: string;
+  lastReadAt: string;
+  isMuted?: boolean;
+}
+
+export interface MessageAttachment {
+  id: string;
+  messageId: string;
+  conversationId: string;
+  storagePath: string;
+  fileName: string;
+  fileSizeBytes: number;
+  mimeType: string;
+  voiceDurationSeconds?: number;
+  createdAt: string;
+  downloadUrl?: string;
+}
+
+export interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderName?: string;
+  senderRole?: UserRole;
+  senderAvatarUrl?: string;
+  messageType: MessageType;
+  body?: string;
+  attachments?: MessageAttachment[];
+  isDeleted?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Conversation {
+  id: string;
+  conversationType: ConversationType;
+  businessId: string;
+  businessName?: string;
+  businessAvatarUrl?: string;
+  creatorId: string;
+  creatorName?: string;
+  creatorAvatarUrl?: string;
+  projectId?: string;
+  projectTitle?: string;
+  projectOfferId?: string;
+  status: ConversationStatus;
+  createdBy: string;
+  lastMessageAt: string;
+  lastMessageSnippet?: string;
+  unreadCount?: number;
+  createdAt: string;
+  updatedAt: string;
+  participants?: ConversationParticipant[];
+}

@@ -3,10 +3,21 @@ package in.prooftopay.app.data.repository
 import in.prooftopay.app.data.model.*
 import in.prooftopay.app.data.supabase.SupabaseClientProvider
 import io.github.jan.supabase.gotrue.providers.builtin.Email
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.realtime.RealtimeChannel
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.postgresChangeFlow
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.storage.storage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -598,5 +609,452 @@ object AuditRepository {
             timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
         )
         _logs.value = listOf(entry) + _logs.value
+    }
+}
+
+object ChatRepository {
+    private val _conversations = MutableStateFlow<List<Conversation>>(listOf(
+        Conversation(
+            id = "conv-pre-1",
+            conversationType = ConversationType.PRE_PROJECT,
+            businessId = "business-1",
+            businessName = "Siddharth Menon (HyperFlow Labs)",
+            businessAvatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=240&auto=format&fit=crop&q=80",
+            creatorId = "student-1",
+            creatorName = "Aarav Sharma",
+            creatorAvatarUrl = "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=240&auto=format&fit=crop&q=80",
+            projectId = "proj-1",
+            projectTitle = "Real-Time Telemetry Dashboard with React & Tailwind",
+            status = "ACTIVE",
+            createdBy = "business-1",
+            lastMessageAt = "2026-09-02 11:45:00",
+            lastMessageSnippet = "Sounds great! Looking forward to reviewing the milestone breakdown.",
+            unreadCount = 0,
+            createdAt = "2026-09-01 10:00:00",
+            updatedAt = "2026-09-02 11:45:00"
+        ),
+        Conversation(
+            id = "conv-proj-1",
+            conversationType = ConversationType.PROJECT,
+            businessId = "business-1",
+            businessName = "Siddharth Menon (HyperFlow Labs)",
+            businessAvatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=240&auto=format&fit=crop&q=80",
+            creatorId = "student-1",
+            creatorName = "Aarav Sharma",
+            creatorAvatarUrl = "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=240&auto=format&fit=crop&q=80",
+            projectId = "proj-1",
+            projectTitle = "Real-Time Telemetry Dashboard with React & Tailwind",
+            projectOfferId = "offer-1",
+            status = "ACTIVE",
+            createdBy = "business-1",
+            lastMessageAt = "2026-09-03 15:30:00",
+            lastMessageSnippet = "I have uploaded the initial wireframe specs. Please take a look.",
+            unreadCount = 1,
+            createdAt = "2026-09-03 09:00:00",
+            updatedAt = "2026-09-03 15:30:00"
+        )
+    ))
+
+    private val _messages = MutableStateFlow<Map<String, List<Message>>>(mapOf(
+        "conv-pre-1" to listOf(
+            Message(
+                id = "msg-1",
+                conversationId = "conv-pre-1",
+                senderId = "business-1",
+                senderName = "Siddharth Menon",
+                senderRole = UserRole.BUSINESS,
+                messageType = MessageType.TEXT,
+                body = "Hi Aarav, loved your DTU telemetry portfolio project. Would you be open to building our live dashboard next week?",
+                createdAt = "2026-09-01 10:05:00",
+                updatedAt = "2026-09-01 10:05:00"
+            ),
+            Message(
+                id = "msg-2",
+                conversationId = "conv-pre-1",
+                senderId = "student-1",
+                senderName = "Aarav Sharma",
+                senderRole = UserRole.STUDENT,
+                messageType = MessageType.TEXT,
+                body = "Hello Siddharth! Absolutely, I have experience with WebSockets and Chart.js. I can deliver the core milestone within 10 days.",
+                createdAt = "2026-09-01 11:20:00",
+                updatedAt = "2026-09-01 11:20:00"
+            )
+        ),
+        "conv-proj-1" to listOf(
+            Message(
+                id = "msg-4",
+                conversationId = "conv-proj-1",
+                senderId = "business-1",
+                senderName = "Siddharth Menon",
+                senderRole = UserRole.BUSINESS,
+                messageType = MessageType.TEXT,
+                body = "Offer accepted! Welcome to the DevFlow Telemetry Dashboard project.",
+                createdAt = "2026-09-03 09:05:00",
+                updatedAt = "2026-09-03 09:05:00"
+            ),
+            Message(
+                id = "msg-5",
+                conversationId = "conv-proj-1",
+                senderId = "student-1",
+                senderName = "Aarav Sharma",
+                senderRole = UserRole.STUDENT,
+                messageType = MessageType.VOICE,
+                body = "Voice update on API integration and chart component architecture.",
+                attachments = listOf(
+                    MessageAttachment(
+                        id = "att-voice-1",
+                        messageId = "msg-5",
+                        conversationId = "conv-proj-1",
+                        storagePath = "conv-proj-1/msg-5/voice_note.mp3",
+                        fileName = "Voice_Note_Architecture.mp3",
+                        fileSizeBytes = 184320L,
+                        mimeType = "audio/mp3",
+                        voiceDurationSeconds = 24,
+                        createdAt = "2026-09-03 11:30:00"
+                    )
+                ),
+                createdAt = "2026-09-03 11:30:00",
+                updatedAt = "2026-09-03 11:30:00"
+            )
+        )
+    ))
+
+    val conversations: StateFlow<List<Conversation>> = _conversations.asStateFlow()
+
+    fun getMessages(conversationId: String): List<Message> {
+        return _messages.value[conversationId] ?: emptyList()
+    }
+
+    suspend fun fetchMessages(conversationId: String, limit: Int = 50): Result<List<Message>> {
+        if (!SupabaseClientProvider.isConfigured) {
+            val list = _messages.value[conversationId] ?: emptyList()
+            return Result.success(list)
+        }
+        return try {
+            val msgRows = SupabaseClientProvider.postgrest["messages"]
+                .select(columns = Columns.ALL) {
+                    filter {
+                        eq("conversation_id", conversationId)
+                    }
+                    order("created_at", Order.ASCENDING)
+                    limit(limit.toLong())
+                }.decodeList<DbMessageRow>()
+
+            val attRows = try {
+                SupabaseClientProvider.postgrest["message_attachments"]
+                    .select(columns = Columns.ALL) {
+                        filter {
+                            eq("conversation_id", conversationId)
+                        }
+                    }.decodeList<DbAttachmentRow>()
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            val attachmentsByMsgId = attRows.groupBy { it.messageId }
+            val conv = _conversations.value.find { it.id == conversationId }
+
+            val mappedMessages = msgRows.map { row ->
+                val attachments = (attachmentsByMsgId[row.id] ?: emptyList()).map { att ->
+                    val signedUrl = try {
+                        SupabaseClientProvider.storage["chat_attachments"]
+                            .createSignedUrl(att.storagePath, expiresIn = kotlin.time.Duration.parse("1h"))
+                    } catch (_: Exception) {
+                        null
+                    }
+
+                    MessageAttachment(
+                        id = att.id,
+                        messageId = att.messageId,
+                        conversationId = att.conversationId,
+                        storagePath = att.storagePath,
+                        fileName = att.fileName,
+                        fileSizeBytes = att.fileSizeBytes,
+                        mimeType = att.mimeType,
+                        voiceDurationSeconds = att.voiceDurationSeconds,
+                        createdAt = att.createdAt,
+                        downloadUrl = signedUrl
+                    )
+                }
+
+                val msgType = try {
+                    MessageType.valueOf(row.messageType)
+                } catch (_: Exception) {
+                    MessageType.TEXT
+                }
+
+                val (senderName, senderRole, senderAvatar) = when {
+                    conv != null && row.senderId == conv.businessId -> Triple(conv.businessName, UserRole.BUSINESS, conv.businessAvatarUrl)
+                    conv != null && row.senderId == conv.creatorId -> Triple(conv.creatorName, UserRole.STUDENT, conv.creatorAvatarUrl)
+                    else -> Triple("Participant", null, null)
+                }
+
+                Message(
+                    id = row.id,
+                    conversationId = row.conversationId,
+                    senderId = row.senderId,
+                    senderName = senderName,
+                    senderRole = senderRole,
+                    senderAvatarUrl = senderAvatar,
+                    messageType = msgType,
+                    body = row.body,
+                    attachments = attachments,
+                    isDeleted = row.isDeleted,
+                    createdAt = row.createdAt,
+                    updatedAt = row.updatedAt
+                )
+            }
+
+            val updatedMap = _messages.value.toMutableMap()
+            updatedMap[conversationId] = mappedMessages
+            _messages.value = updatedMap
+
+            Result.success(mappedMessages)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun markConversationRead(conversationId: String, userId: String) {
+        _conversations.value = _conversations.value.map {
+            if (it.id == conversationId) it.copy(unreadCount = 0) else it
+        }
+    }
+
+    fun subscribeToConversation(
+        conversationId: String,
+        scope: CoroutineScope,
+        onNewMessage: (suspend () -> Unit)? = null
+    ): () -> Unit {
+        if (!SupabaseClientProvider.isConfigured) {
+            return {}
+        }
+        val channel = SupabaseClientProvider.realtime.channel("chat:$conversationId")
+        val changeFlow = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
+            table = "messages"
+            filter = "conversation_id=eq.$conversationId"
+        }
+        val job = scope.launch(Dispatchers.IO) {
+            changeFlow.collect {
+                fetchMessages(conversationId)
+                onNewMessage?.invoke()
+            }
+        }
+        scope.launch(Dispatchers.IO) {
+            try {
+                channel.subscribe()
+            } catch (_: Exception) {}
+        }
+        return {
+            job.cancel()
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    channel.unsubscribe()
+                    SupabaseClientProvider.realtime.removeChannel(channel)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    suspend fun uploadAttachment(
+        conversationId: String,
+        fileBytes: ByteArray,
+        fileName: String,
+        mimeType: String,
+        voiceDurationSeconds: Int? = null
+    ): Result<MessageAttachment> {
+        return try {
+            val cleanName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            val storagePath = "conversations/$conversationId/${System.currentTimeMillis()}_$cleanName"
+            val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+
+            val downloadUrl = if (SupabaseClientProvider.isConfigured) {
+                val bucket = SupabaseClientProvider.client.storage["chat_attachments"]
+                bucket.upload(storagePath, fileBytes) {
+                    upsert = false
+                }
+                // Generate a short-lived signed URL for authenticated participant viewing
+                bucket.createSignedUrl(storagePath, expiresIn = kotlin.time.Duration.parse("1h"))
+            } else {
+                null
+            }
+
+            val attachment = MessageAttachment(
+                id = "att-${System.currentTimeMillis()}",
+                messageId = "",
+                conversationId = conversationId,
+                storagePath = storagePath,
+                fileName = fileName,
+                fileSizeBytes = fileBytes.size.toLong(),
+                mimeType = mimeType,
+                voiceDurationSeconds = voiceDurationSeconds,
+                createdAt = now,
+                downloadUrl = downloadUrl
+            )
+            Result.success(attachment)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun sendMessage(
+        conversationId: String,
+        senderId: String,
+        senderName: String,
+        senderRole: UserRole,
+        messageType: MessageType,
+        body: String?,
+        attachments: List<MessageAttachment> = emptyList()
+    ): Result<Message> {
+        val conv = _conversations.value.find { it.id == conversationId }
+            ?: return Result.failure(IllegalArgumentException("Conversation not found"))
+        if (conv.status != "ACTIVE") {
+            return Result.failure(IllegalStateException("Conversation is not active"))
+        }
+
+        if (SupabaseClientProvider.isConfigured) {
+            return try {
+                val rpcParams = DbSendChatMessageParams(
+                    conversationId = conversationId,
+                    messageType = messageType.name,
+                    body = body,
+                    attachments = attachments.map {
+                        DbRpcAttachmentInput(
+                            storagePath = it.storagePath,
+                            fileName = it.fileName,
+                            fileSizeBytes = it.fileSizeBytes,
+                            mimeType = it.mimeType,
+                            voiceDurationSeconds = it.voiceDurationSeconds
+                        )
+                    }
+                )
+
+                val rpcResult = SupabaseClientProvider.postgrest.rpc(
+                    function = "send_chat_message",
+                    parameters = rpcParams
+                ).decodeAs<DbSendChatMessageResult>()
+
+                val savedAttachments = rpcResult.attachments.map { att ->
+                    val originalAtt = attachments.find { it.storagePath == att.storagePath }
+                    MessageAttachment(
+                        id = att.id,
+                        messageId = att.messageId,
+                        conversationId = att.conversationId,
+                        storagePath = att.storagePath,
+                        fileName = att.fileName,
+                        fileSizeBytes = att.fileSizeBytes,
+                        mimeType = att.mimeType,
+                        voiceDurationSeconds = att.voiceDurationSeconds,
+                        createdAt = att.createdAt,
+                        downloadUrl = originalAtt?.downloadUrl
+                    )
+                }
+
+                val domainMsg = Message(
+                    id = rpcResult.id,
+                    conversationId = conversationId,
+                    senderId = rpcResult.senderId,
+                    senderName = senderName,
+                    senderRole = senderRole,
+                    senderAvatarUrl = if (senderRole == UserRole.BUSINESS) conv.businessAvatarUrl else conv.creatorAvatarUrl,
+                    messageType = messageType,
+                    body = rpcResult.body,
+                    attachments = savedAttachments,
+                    createdAt = rpcResult.createdAt,
+                    updatedAt = rpcResult.updatedAt
+                )
+
+                val currentList = _messages.value[conversationId] ?: emptyList()
+                val updatedMap = _messages.value.toMutableMap()
+                updatedMap[conversationId] = currentList + domainMsg
+                _messages.value = updatedMap
+
+                _conversations.value = _conversations.value.map {
+                    if (it.id == conversationId) {
+                        it.copy(
+                            lastMessageAt = rpcResult.createdAt,
+                            lastMessageSnippet = if (messageType == MessageType.TEXT) (body ?: "") else if (messageType == MessageType.VOICE) "Voice Note" else "Attachment"
+                        )
+                    } else it
+                }
+
+                Result.success(domainMsg)
+            } catch (e: Exception) {
+                // If transactional RPC fails or rolls back, clean up any storage objects that were pre-uploaded
+                for (att in attachments) {
+                    if (att.storagePath.isNotBlank()) {
+                        try {
+                            SupabaseClientProvider.client.storage["chat_attachments"].delete(att.storagePath)
+                        } catch (_: Exception) {}
+                    }
+                }
+                Result.failure(e)
+            }
+        } else {
+            val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+            val newMsg = Message(
+                id = "msg-${System.currentTimeMillis()}",
+                conversationId = conversationId,
+                senderId = senderId,
+                senderName = senderName,
+                senderRole = senderRole,
+                messageType = messageType,
+                body = body,
+                attachments = attachments,
+                createdAt = now,
+                updatedAt = now
+            )
+
+            val currentList = _messages.value[conversationId] ?: emptyList()
+            val updatedMap = _messages.value.toMutableMap()
+            updatedMap[conversationId] = currentList + newMsg
+            _messages.value = updatedMap
+
+            _conversations.value = _conversations.value.map {
+                if (it.id == conversationId) {
+                    it.copy(
+                        lastMessageAt = now,
+                        lastMessageSnippet = if (messageType == MessageType.TEXT) (body ?: "") else if (messageType == MessageType.VOICE) "Voice Note" else "Attachment"
+                    )
+                } else it
+            }
+
+            return Result.success(newMsg)
+        }
+    }
+
+    fun getOrCreatePreProjectConversation(
+        businessId: String,
+        businessName: String,
+        creatorId: String,
+        creatorName: String,
+        projectId: String?,
+        projectTitle: String?
+    ): Conversation {
+        val existing = _conversations.value.find {
+            it.conversationType == ConversationType.PRE_PROJECT && it.businessId == businessId && it.creatorId == creatorId && (projectId == null || it.projectId == projectId)
+        }
+        if (existing != null) return existing
+
+        val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        val newConv = Conversation(
+            id = "conv-pre-${System.currentTimeMillis()}",
+            conversationType = ConversationType.PRE_PROJECT,
+            businessId = businessId,
+            businessName = businessName,
+            creatorId = creatorId,
+            creatorName = creatorName,
+            projectId = projectId,
+            projectTitle = projectTitle,
+            status = "ACTIVE",
+            createdBy = businessId,
+            lastMessageAt = now,
+            lastMessageSnippet = "Inquiry thread started",
+            unreadCount = 0,
+            createdAt = now,
+            updatedAt = now
+        )
+        _conversations.value = listOf(newConv) + _conversations.value
+        return newConv
     }
 }

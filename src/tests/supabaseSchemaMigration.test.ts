@@ -133,4 +133,35 @@ describe('PROOF-TO-PAY: Supabase Schema & Migration File Verification', () => {
       });
     });
   });
+
+  describe('Canonical Complete Schema Consistency Verification', () => {
+    it('verifies schema.sql includes all tables from Migration 02 (recruiter & referrals)', () => {
+      const migration2Tables = [
+        'recruiter_profiles',
+        'talent_collections',
+        'talent_collection_items',
+        'referral_codes',
+        'referrals'
+      ];
+      migration2Tables.forEach((table) => {
+        expect(schemaContent).toMatch(new RegExp(`create\\s+table\\s+if\\s+not\\s+exists\\s+public\\.${table}`, 'i'));
+        expect(schemaContent).toMatch(new RegExp(`alter\\s+table\\s+public\\.${table}\\s+enable\\s+row\\s+level\\s+security`, 'i'));
+      });
+    });
+
+    it('verifies schema.sql includes all tables from Migration 03 (chat system & transactional RPC)', () => {
+      const migration3Tables = [
+        'conversations',
+        'conversation_participants',
+        'messages',
+        'message_attachments'
+      ];
+      migration3Tables.forEach((table) => {
+        expect(schemaContent).toMatch(new RegExp(`create\\s+table\\s+if\\s+not\\s+exists\\s+public\\.${table}`, 'i'));
+        expect(schemaContent).toMatch(new RegExp(`alter\\s+table\\s+public\\.${table}\\s+enable\\s+row\\s+level\\s+security`, 'i'));
+      });
+      expect(schemaContent).toMatch(/create\s+or\s+replace\s+function\s+public\.send_chat_message/i);
+      expect(schemaContent).toMatch(/grant\s+execute\s+on\s+function\s+public\.send_chat_message.*to\s+authenticated/i);
+    });
+  });
 });

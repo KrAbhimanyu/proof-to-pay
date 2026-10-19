@@ -40,8 +40,8 @@ import {
   Info,
   Sparkles,
   Lock,
-  X,
-  LogOut
+  LogOut,
+  MessageSquare
 } from 'lucide-react';
 
 interface Props {
@@ -50,6 +50,12 @@ interface Props {
   onLogout?: () => void;
   controlledTab?: string;
   onTabChange?: (tab: string) => void;
+  onOpenChat?: (params?: {
+    conversationId?: string;
+    targetUser?: { id: string; name: string; role: 'STUDENT' | 'BUSINESS' | 'ADMIN' | 'RECRUITER' };
+    targetProjectId?: string;
+    targetOfferId?: string;
+  }) => void;
 }
 
 export const BusinessDashboard: React.FC<Props> = ({
@@ -58,6 +64,7 @@ export const BusinessDashboard: React.FC<Props> = ({
   onLogout,
   controlledTab,
   onTabChange,
+  onOpenChat,
 }) => {
   const [internalTab, setInternalTab] = useState<'overview' | 'projects' | 'create_project' | 'applications' | 'active_work' | 'payments' | 'verification'>('overview');
   
@@ -908,6 +915,28 @@ export const BusinessDashboard: React.FC<Props> = ({
                       >
                         <RotateCcw className="w-3.5 h-3.5 text-indigo-600" />
                         <span>Propose Scope Change</span>
+                      </button>
+                    )}
+
+                    {onOpenChat && (
+                      <button
+                        onClick={() => {
+                          const acceptedOffer = offers.find(
+                            (o) => o.projectId === proj.id && o.status === 'ACCEPTED'
+                          );
+                          if (acceptedOffer) {
+                            onOpenChat({ targetOfferId: acceptedOffer.id });
+                          } else if (proj.selectedStudentId) {
+                            onOpenChat({
+                              targetUser: { id: proj.selectedStudentId, name: proj.selectedStudentName || 'Creator', role: 'STUDENT' },
+                              targetProjectId: proj.id
+                            });
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-semibold hover:bg-indigo-100 transition flex items-center gap-1.5 shadow-2xs"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        <span>Project Chat</span>
                       </button>
                     )}
                   </div>

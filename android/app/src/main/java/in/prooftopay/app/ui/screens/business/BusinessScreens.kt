@@ -24,6 +24,7 @@ import in.prooftopay.app.data.model.*
 import in.prooftopay.app.theme.*
 import in.prooftopay.app.ui.components.BusinessBottomBar
 import in.prooftopay.app.ui.components.ProofTopBar
+import in.prooftopay.app.ui.components.ThemeSelectorCard
 import in.prooftopay.app.viewmodel.AuthViewModel
 import in.prooftopay.app.viewmodel.BusinessViewModel
 
@@ -797,6 +798,8 @@ fun BusinessSettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            ThemeSelectorCard()
+
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = when (businessProfile.verificationStatus) {

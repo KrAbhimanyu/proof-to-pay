@@ -42,4 +42,10 @@ sealed class Screen(val route: String) {
     object RecruiterHome : Screen("recruiter_home")
     object TalentCollections : Screen("talent_collections")
     object ReferralNetwork : Screen("referral_network")
+
+    // Secure Chat & Messaging screens
+    object ChatInbox : Screen("chat_inbox")
+    object ChatConversation : Screen("chat_conversation/{conversationId}") {
+        fun createRoute(conversationId: String) = "chat_conversation/$conversationId"
+    }
 }

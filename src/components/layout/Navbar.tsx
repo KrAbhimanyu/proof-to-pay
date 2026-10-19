@@ -1,7 +1,8 @@
 import React from 'react';
 import { User } from '../../types';
 import { PWAInstallButton } from '../common/PWAInstallButton';
-import { Shield, Sparkles, UserCircle, LogOut } from 'lucide-react';
+import { ThemeToggle } from '../common/ThemeToggle';
+import { Shield, Sparkles, UserCircle, LogOut, MessageSquare } from 'lucide-react';
 
 interface Props {
   currentUser: User | null;
@@ -9,6 +10,8 @@ interface Props {
   onNavigate: (view: string, param?: string) => void;
   onOpenAuth: (mode?: 'login' | 'register_student' | 'register_business') => void;
   onLogout?: () => void;
+  onOpenChat?: () => void;
+  unreadChatCount?: number;
 }
 
 export const Navbar: React.FC<Props> = ({
@@ -17,6 +20,8 @@ export const Navbar: React.FC<Props> = ({
   onNavigate,
   onOpenAuth,
   onLogout,
+  onOpenChat,
+  unreadChatCount = 0,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors">
@@ -103,8 +108,26 @@ export const Navbar: React.FC<Props> = ({
             <PWAInstallButton variant="compact" />
           </div>
 
+          <ThemeToggle variant="dropdown" />
+
           {currentUser ? (
             <div className="flex items-center gap-2">
+              {onOpenChat && (
+                <button
+                  onClick={onOpenChat}
+                  title="Open Secure Messages"
+                  className="relative flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400 shadow-xs transition whitespace-nowrap"
+                >
+                  <MessageSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span className="hidden sm:inline">Messages</span>
+                  {unreadChatCount > 0 && (
+                    <span className="px-1.5 py-0.2 bg-indigo-600 text-white font-black text-[10px] rounded-full animate-pulse">
+                      {unreadChatCount}
+                    </span>
+                  )}
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   if (currentUser.role === 'STUDENT') onNavigate('student_dashboard');

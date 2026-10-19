@@ -10,11 +10,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import in.prooftopay.app.theme.ProofToPayTheme
+import in.prooftopay.app.theme.ThemeRepository
 import in.prooftopay.app.ui.navigation.AppNavGraph
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ThemeRepository.init(applicationContext)
         enableEdgeToEdge()
         setContent {
             ProofToPayTheme {

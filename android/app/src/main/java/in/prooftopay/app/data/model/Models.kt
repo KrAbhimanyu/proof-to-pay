@@ -401,4 +401,162 @@ data class ReferralStats(
     @SerialName("commission_discount_percent") val commissionDiscountPercent: Int = 0
 )
 
+enum class ConversationType {
+    PRE_PROJECT, PROJECT
+}
 
+enum class MessageType {
+    TEXT, IMAGE, FILE, VOICE, SYSTEM
+}
+
+@Serializable
+data class ConversationParticipant(
+    val id: String,
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("user_name") val userName: String? = null,
+    @SerialName("user_role") val userRole: UserRole? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    @SerialName("joined_at") val joinedAt: String,
+    @SerialName("last_read_at") val lastReadAt: String,
+    @SerialName("is_muted") val isMuted: Boolean = false
+)
+
+@Serializable
+data class MessageAttachment(
+    val id: String,
+    @SerialName("message_id") val messageId: String,
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("storage_path") val storagePath: String,
+    @SerialName("file_name") val fileName: String,
+    @SerialName("file_size_bytes") val fileSizeBytes: Long,
+    @SerialName("mime_type") val mimeType: String,
+    @SerialName("voice_duration_seconds") val voiceDurationSeconds: Int? = null,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("download_url") val downloadUrl: String? = null
+)
+
+@Serializable
+data class Message(
+    val id: String,
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("sender_id") val senderId: String,
+    @SerialName("sender_name") val senderName: String? = null,
+    @SerialName("sender_role") val senderRole: UserRole? = null,
+    @SerialName("sender_avatar_url") val senderAvatarUrl: String? = null,
+    @SerialName("message_type") val messageType: MessageType = MessageType.TEXT,
+    val body: String? = null,
+    val attachments: List<MessageAttachment> = emptyList(),
+    @SerialName("is_deleted") val isDeleted: Boolean = false,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String
+)
+
+@Serializable
+data class Conversation(
+    val id: String,
+    @SerialName("conversation_type") val conversationType: ConversationType = ConversationType.PRE_PROJECT,
+    @SerialName("business_id") val businessId: String,
+    @SerialName("business_name") val businessName: String? = null,
+    @SerialName("business_avatar_url") val businessAvatarUrl: String? = null,
+    @SerialName("creator_id") val creatorId: String,
+    @SerialName("creator_name") val creatorName: String? = null,
+    @SerialName("creator_avatar_url") val creatorAvatarUrl: String? = null,
+    @SerialName("project_id") val projectId: String? = null,
+    @SerialName("project_title") val projectTitle: String? = null,
+    @SerialName("project_offer_id") val projectOfferId: String? = null,
+    val status: String = "ACTIVE",
+    @SerialName("created_by") val createdBy: String,
+    @SerialName("last_message_at") val lastMessageAt: String,
+    @SerialName("last_message_snippet") val lastMessageSnippet: String? = null,
+    @SerialName("unread_count") val unreadCount: Int = 0,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
+    val participants: List<ConversationParticipant> = emptyList()
+)
+
+@Serializable
+data class DbMessageInsert(
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("sender_id") val senderId: String,
+    @SerialName("message_type") val messageType: String,
+    val body: String? = null
+)
+
+@Serializable
+data class DbMessageRow(
+    val id: String,
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("sender_id") val senderId: String,
+    @SerialName("message_type") val messageType: String,
+    val body: String? = null,
+    @SerialName("is_deleted") val isDeleted: Boolean = false,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String
+)
+
+@Serializable
+data class DbAttachmentInsert(
+    @SerialName("message_id") val messageId: String,
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("storage_path") val storagePath: String,
+    @SerialName("file_name") val fileName: String,
+    @SerialName("file_size_bytes") val fileSizeBytes: Long,
+    @SerialName("mime_type") val mimeType: String,
+    @SerialName("voice_duration_seconds") val voiceDurationSeconds: Int? = null
+)
+
+@Serializable
+data class DbAttachmentRow(
+    val id: String,
+    @SerialName("message_id") val messageId: String,
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("storage_path") val storagePath: String,
+    @SerialName("file_name") val fileName: String,
+    @SerialName("file_size_bytes") val fileSizeBytes: Long,
+    @SerialName("mime_type") val mimeType: String,
+    @SerialName("voice_duration_seconds") val voiceDurationSeconds: Int? = null,
+    @SerialName("created_at") val createdAt: String
+)
+
+@Serializable
+data class DbRpcAttachmentInput(
+    @SerialName("storage_path") val storagePath: String,
+    @SerialName("file_name") val fileName: String,
+    @SerialName("file_size_bytes") val fileSizeBytes: Long,
+    @SerialName("mime_type") val mimeType: String,
+    @SerialName("voice_duration_seconds") val voiceDurationSeconds: Int? = null
+)
+
+@Serializable
+data class DbSendChatMessageParams(
+    @SerialName("p_conversation_id") val conversationId: String,
+    @SerialName("p_message_type") val messageType: String,
+    @SerialName("p_body") val body: String? = null,
+    @SerialName("p_attachments") val attachments: List<DbRpcAttachmentInput> = emptyList()
+)
+
+@Serializable
+data class DbRpcAttachmentResult(
+    val id: String,
+    @SerialName("message_id") val messageId: String,
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("storage_path") val storagePath: String,
+    @SerialName("file_name") val fileName: String,
+    @SerialName("file_size_bytes") val fileSizeBytes: Long,
+    @SerialName("mime_type") val mimeType: String,
+    @SerialName("voice_duration_seconds") val voiceDurationSeconds: Int? = null,
+    @SerialName("created_at") val createdAt: String
+)
+
+@Serializable
+data class DbSendChatMessageResult(
+    val id: String,
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("sender_id") val senderId: String,
+    @SerialName("message_type") val messageType: String,
+    val body: String? = null,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
+    val attachments: List<DbRpcAttachmentResult> = emptyList()
+)

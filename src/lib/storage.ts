@@ -31,7 +31,14 @@ import {
   TalentCollectionItem,
   ReferralRecord,
   ReferralStats,
-  ReferralStatus
+  ReferralStatus,
+  ReferralLeaderboardEntry,
+  Conversation,
+  ConversationType,
+  ConversationParticipant,
+  Message,
+  MessageAttachment,
+  MessageType
 } from '../types';
 import {
   INITIAL_USERS,
@@ -51,7 +58,9 @@ import {
   INITIAL_SCOPE_CHANGE_REQUESTS,
   INITIAL_RECRUITER_PROFILES,
   INITIAL_TALENT_COLLECTIONS,
-  INITIAL_REFERRAL_RECORDS
+  INITIAL_REFERRAL_RECORDS,
+  INITIAL_CONVERSATIONS,
+  INITIAL_MESSAGES
 } from './mockData';
 import { isSupabaseConfigured, getSupabaseConfig } from './supabaseClient';
 
@@ -62,6 +71,8 @@ const STORAGE_KEYS = {
   RECRUITER_PROFILES: 'ptp_recruiter_profiles',
   TALENT_COLLECTIONS: 'ptp_talent_collections',
   REFERRALS: 'ptp_referrals',
+  CONVERSATIONS: 'ptp_conversations',
+  MESSAGES: 'ptp_messages',
   PROJECTS: 'ptp_projects',
   APPLICATIONS: 'ptp_applications',
   OFFERS: 'ptp_offers',
@@ -171,6 +182,8 @@ class MarketplaceStore {
     this.set(STORAGE_KEYS.RECRUITER_PROFILES, INITIAL_RECRUITER_PROFILES);
     this.set(STORAGE_KEYS.TALENT_COLLECTIONS, INITIAL_TALENT_COLLECTIONS);
     this.set(STORAGE_KEYS.REFERRALS, INITIAL_REFERRAL_RECORDS);
+    this.set(STORAGE_KEYS.CONVERSATIONS, INITIAL_CONVERSATIONS);
+    this.set(STORAGE_KEYS.MESSAGES, INITIAL_MESSAGES);
     this.set(STORAGE_KEYS.PROJECTS, INITIAL_PROJECTS);
     this.set(STORAGE_KEYS.APPLICATIONS, INITIAL_APPLICATIONS);
     this.set(STORAGE_KEYS.OFFERS, INITIAL_OFFERS);
@@ -2375,6 +2388,492 @@ class MarketplaceStore {
     }
   }
 
+  public getReferralLeaderboard(
+    filterRole?: UserRole | 'ALL',
+    currentUserId?: string
+  ): ReferralLeaderboardEntry[] {
+    const referrals = this.getReferrals();
+    const users = this.getUsers();
+    const studentProfiles = this.getStudentProfiles();
+
+    // Group referrals by referrerId
+    const referrerMap = new Map<string, ReferralRecord[]>();
+    for (const ref of referrals) {
+      const list = referrerMap.get(ref.referrerId) || [];
+      list.push(ref);
+      referrerMap.set(ref.referrerId, list);
+    }
+
+    const entries: ReferralLeaderboardEntry[] = [];
+
+    for (const [referrerId, refList] of referrerMap.entries()) {
+      const user = users.find((u) => u.id === referrerId);
+      if (!user) continue;
+
+      if (filterRole && filterRole !== 'ALL' && user.role !== filterRole) {
+        continue;
+      }
+
+      const totalInvited = refList.length;
+      const successfulConversions = refList.filter(
+        (r) => r.status === 'ACTIVE_MILESTONE' || r.status === 'REWARDED'
+      ).length;
+
+      const totalEarnedINR = refList
+        .filter((r) => r.status === 'ACTIVE_MILESTONE' || r.status === 'REWARDED')
+        .reduce((sum, r) => sum + r.rewardAmountINR, 0);
+
+      const conversionRate = totalInvited > 0 ? Math.round((successfulConversions / totalInvited) * 100) : 0;
+
+      let collegeOrCompany: string | undefined;
+      if (user.role === 'STUDENT') {
+        const sp = studentProfiles[user.id] || INITIAL_STUDENT_PROFILES[user.id];
+        collegeOrCompany = sp?.college;
+      } else if (user.role === 'BUSINESS') {
+        const bp = this.getBusinessProfile(user.id) || INITIAL_BUSINESS_PROFILES[user.id];
+        collegeOrCompany = bp?.companyName;
+      } else if (user.role === 'RECRUITER') {
+        const rp = this.getRecruiterProfile(user.id);
+        collegeOrCompany = rp?.companyName;
+      }
+
+      const referralCode = this.getReferralCodeForUser(user.id);
+
+      entries.push({
+        rank: 0,
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        userRole: user.role,
+        avatarUrl: user.avatarUrl,
+        collegeOrCompany,
+        city: user.city,
+        referralCode,
+        totalInvited,
+        successfulConversions,
+        conversionRate,
+        totalEarnedINR,
+        isCurrentUser: currentUserId ? user.id === currentUserId : false
+      });
+    }
+
+    // Sort by: successfulConversions desc, totalEarnedINR desc, totalInvited desc
+    entries.sort((a, b) => {
+      if (b.successfulConversions !== a.successfulConversions) {
+        return b.successfulConversions - a.successfulConversions;
+      }
+      if (b.totalEarnedINR !== a.totalEarnedINR) {
+        return b.totalEarnedINR - a.totalEarnedINR;
+      }
+      return b.totalInvited - a.totalInvited;
+    });
+
+    // Assign rank and badges
+    return entries.map((entry, idx) => {
+      const rank = idx + 1;
+      let badge: string | undefined;
+      if (rank === 1) {
+        badge = 'Grand Ambassador 🏆';
+      } else if (rank === 2) {
+        badge = 'Super Connector ⭐';
+      } else if (rank === 3) {
+        badge = 'Top Scout 🌟';
+      } else if (entry.successfulConversions >= 1) {
+        badge = 'Rising Ambassador 🚀';
+      }
+
+      return {
+        ...entry,
+        rank,
+        badge
+      };
+    });
+  }
+
+  // --- Secure Messaging Subsystem ---
+  public getConversations(userId?: string): Conversation[] {
+    const rawConversations = this.get<Conversation[]>(
+      STORAGE_KEYS.CONVERSATIONS,
+      INITIAL_CONVERSATIONS
+    );
+    const users = this.getUsers();
+    const projects = this.getProjects();
+    const allMessages = this.get<Message[]>(STORAGE_KEYS.MESSAGES, INITIAL_MESSAGES);
+
+    let conversations = rawConversations;
+    if (userId) {
+      conversations = rawConversations.filter(
+        (c) => c.businessId === userId || c.creatorId === userId
+      );
+    }
+
+    // Enrich conversation metadata and unread counts
+    const enriched = conversations.map((conv) => {
+      const bizUser = users.find((u) => u.id === conv.businessId);
+      const creatorUser = users.find((u) => u.id === conv.creatorId);
+      const proj = conv.projectId ? projects.find((p) => p.id === conv.projectId) : undefined;
+
+      const convMessages = allMessages.filter((m) => m.conversationId === conv.id);
+      const lastMsg = convMessages[convMessages.length - 1];
+
+      let unreadCount = 0;
+      if (userId && conv.participants) {
+        const participant = conv.participants.find((p) => p.userId === userId);
+        const lastRead = participant ? new Date(participant.lastReadAt).getTime() : 0;
+        unreadCount = convMessages.filter(
+          (m) => m.senderId !== userId && new Date(m.createdAt).getTime() > lastRead
+        ).length;
+      }
+
+      return {
+        ...conv,
+        businessName: bizUser?.name || conv.businessName,
+        businessAvatarUrl: bizUser?.avatarUrl || conv.businessAvatarUrl,
+        creatorName: creatorUser?.name || conv.creatorName,
+        creatorAvatarUrl: creatorUser?.avatarUrl || conv.creatorAvatarUrl,
+        projectTitle: proj?.title || conv.projectTitle,
+        lastMessageSnippet: lastMsg
+          ? lastMsg.messageType === 'TEXT'
+            ? lastMsg.body
+            : lastMsg.messageType === 'VOICE'
+            ? '🎤 Voice Message'
+            : lastMsg.messageType === 'IMAGE'
+            ? '📷 Image Attachment'
+            : '📎 File Attachment'
+          : conv.lastMessageSnippet,
+        unreadCount
+      };
+    });
+
+    return enriched.sort(
+      (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+    );
+  }
+
+  public getConversation(conversationId: string): Conversation | null {
+    const list = this.getConversations();
+    return list.find((c) => c.id === conversationId) || null;
+  }
+
+  public getOrCreatePreProjectConversation(
+    businessId: string,
+    creatorId: string,
+    createdById: string,
+    projectId?: string
+  ): Conversation {
+    if (businessId === creatorId) {
+      throw new Error('A user cannot start a conversation with themselves');
+    }
+
+    const users = this.getUsers();
+    const biz = users.find((u) => u.id === businessId);
+    const creator = users.find((u) => u.id === creatorId);
+
+    if (!biz || biz.isSuspended) {
+      throw new Error('Business account is invalid or suspended');
+    }
+    if (!creator || creator.isSuspended) {
+      throw new Error('Creator account is invalid or suspended');
+    }
+
+    const allConversations = this.get<Conversation[]>(
+      STORAGE_KEYS.CONVERSATIONS,
+      INITIAL_CONVERSATIONS
+    );
+
+    // Look for existing pre-project conversation to prevent duplicates
+    const existing = allConversations.find(
+      (c) =>
+        c.conversationType === 'PRE_PROJECT' &&
+        c.businessId === businessId &&
+        c.creatorId === creatorId &&
+        (projectId ? c.projectId === projectId : !c.projectId)
+    );
+
+    if (existing) {
+      return existing;
+    }
+
+    const now = new Date().toISOString();
+    const newConv: Conversation = {
+      id: `conv-pre-${Date.now()}`,
+      conversationType: 'PRE_PROJECT',
+      businessId,
+      businessName: biz.name,
+      businessAvatarUrl: biz.avatarUrl,
+      creatorId,
+      creatorName: creator.name,
+      creatorAvatarUrl: creator.avatarUrl,
+      projectId,
+      status: 'ACTIVE',
+      createdBy: createdById,
+      lastMessageAt: now,
+      lastMessageSnippet: 'Pre-project conversation started',
+      unreadCount: 0,
+      createdAt: now,
+      updatedAt: now,
+      participants: [
+        {
+          id: `cp-${Date.now()}-1`,
+          conversationId: `conv-pre-${Date.now()}`,
+          userId: businessId,
+          userName: biz.name,
+          userRole: biz.role,
+          avatarUrl: biz.avatarUrl,
+          joinedAt: now,
+          lastReadAt: now
+        },
+        {
+          id: `cp-${Date.now()}-2`,
+          conversationId: `conv-pre-${Date.now()}`,
+          userId: creatorId,
+          userName: creator.name,
+          userRole: creator.role,
+          avatarUrl: creator.avatarUrl,
+          joinedAt: now,
+          lastReadAt: now
+        }
+      ]
+    };
+
+    this.set(STORAGE_KEYS.CONVERSATIONS, [newConv, ...allConversations]);
+
+    // Add initial system message
+    this.sendMessage({
+      conversationId: newConv.id,
+      senderId: createdById,
+      messageType: 'SYSTEM',
+      body: 'Pre-project inquiry channel initialized. Please keep milestone communications professional.'
+    });
+
+    return newConv;
+  }
+
+  public getOrCreateProjectConversation(offerId: string): Conversation {
+    const offers = this.getOffers();
+    const offer = offers.find((o) => o.id === offerId);
+    if (!offer) {
+      throw new Error('Project offer not found');
+    }
+    if (offer.status !== 'ACCEPTED') {
+      throw new Error('Project conversations can only be created for ACCEPTED offers');
+    }
+
+    const allConversations = this.get<Conversation[]>(
+      STORAGE_KEYS.CONVERSATIONS,
+      INITIAL_CONVERSATIONS
+    );
+
+    const existing = allConversations.find((c) => c.projectOfferId === offerId);
+    if (existing) {
+      return existing;
+    }
+
+    const users = this.getUsers();
+    const biz = users.find((u) => u.id === offer.businessId);
+    const creator = users.find((u) => u.id === offer.studentId);
+
+    const now = new Date().toISOString();
+    const newConv: Conversation = {
+      id: `conv-proj-${Date.now()}`,
+      conversationType: 'PROJECT',
+      businessId: offer.businessId,
+      businessName: offer.businessName,
+      businessAvatarUrl: biz?.avatarUrl,
+      creatorId: offer.studentId,
+      creatorName: offer.studentName,
+      creatorAvatarUrl: creator?.avatarUrl,
+      projectId: offer.projectId,
+      projectTitle: offer.projectTitle,
+      projectOfferId: offer.id,
+      status: 'ACTIVE',
+      createdBy: offer.businessId,
+      lastMessageAt: now,
+      lastMessageSnippet: 'Dedicated project chat channel unlocked upon offer acceptance',
+      unreadCount: 0,
+      createdAt: now,
+      updatedAt: now,
+      participants: [
+        {
+          id: `cp-${Date.now()}-1`,
+          conversationId: `conv-proj-${Date.now()}`,
+          userId: offer.businessId,
+          userName: offer.businessName,
+          userRole: 'BUSINESS',
+          joinedAt: now,
+          lastReadAt: now
+        },
+        {
+          id: `cp-${Date.now()}-2`,
+          conversationId: `conv-proj-${Date.now()}`,
+          userId: offer.studentId,
+          userName: offer.studentName,
+          userRole: 'STUDENT',
+          joinedAt: now,
+          lastReadAt: now
+        }
+      ]
+    };
+
+    this.set(STORAGE_KEYS.CONVERSATIONS, [newConv, ...allConversations]);
+
+    // System welcome message
+    this.sendMessage({
+      conversationId: newConv.id,
+      senderId: offer.businessId,
+      messageType: 'SYSTEM',
+      body: `Project workspace initialized for "${offer.projectTitle}". Agreed Budget: ₹${offer.agreedBudgetINR.toLocaleString('en-IN')}. Timeline: ${offer.agreedDeadline}.`
+    });
+
+    return newConv;
+  }
+
+  public getMessages(conversationId: string): Message[] {
+    const allMessages = this.get<Message[]>(STORAGE_KEYS.MESSAGES, INITIAL_MESSAGES);
+    const users = this.getUsers();
+
+    const filtered = allMessages.filter((m) => m.conversationId === conversationId);
+    return filtered
+      .map((m) => {
+        const sender = users.find((u) => u.id === m.senderId);
+        return {
+          ...m,
+          senderName: sender?.name || m.senderName,
+          senderRole: sender?.role || m.senderRole,
+          senderAvatarUrl: sender?.avatarUrl || m.senderAvatarUrl
+        };
+      })
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }
+
+  public sendMessage(params: {
+    conversationId: string;
+    senderId: string;
+    messageType: MessageType;
+    body?: string;
+    attachments?: MessageAttachment[];
+  }): Message {
+    const allConversations = this.get<Conversation[]>(
+      STORAGE_KEYS.CONVERSATIONS,
+      INITIAL_CONVERSATIONS
+    );
+    const convIndex = allConversations.findIndex((c) => c.id === params.conversationId);
+    if (convIndex === -1) {
+      throw new Error('Conversation not found');
+    }
+    const conv = allConversations[convIndex];
+    if (conv.status !== 'ACTIVE') {
+      throw new Error('Cannot send messages to an archived or blocked conversation');
+    }
+
+    // Verify sender
+    const users = this.getUsers();
+    const sender = users.find((u) => u.id === params.senderId);
+    if (!sender && params.messageType !== 'SYSTEM') {
+      throw new Error('Invalid sender');
+    }
+    if (sender && sender.isSuspended) {
+      throw new Error('Suspended users cannot send messages');
+    }
+
+    // Verify sender is authorized participant
+    if (
+      params.messageType !== 'SYSTEM' &&
+      conv.businessId !== params.senderId &&
+      conv.creatorId !== params.senderId
+    ) {
+      throw new Error('Sender is not an authorized participant in this conversation');
+    }
+
+    // Validate body
+    if (
+      params.messageType === 'TEXT' &&
+      (!params.body || params.body.trim().length === 0)
+    ) {
+      throw new Error('Text messages must not have an empty body');
+    }
+
+    // Validate attachments
+    if (params.attachments && params.attachments.length > 0) {
+      for (const att of params.attachments) {
+        if (att.fileSizeBytes > 20971520) {
+          throw new Error('File size exceeds 20 MB limit');
+        }
+        if (att.voiceDurationSeconds && att.voiceDurationSeconds > 180) {
+          throw new Error('Voice message duration exceeds 3 minute limit');
+        }
+      }
+    }
+
+    const now = new Date().toISOString();
+    const newMsg: Message = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      conversationId: params.conversationId,
+      senderId: params.senderId,
+      senderName: sender?.name || 'System',
+      senderRole: sender?.role,
+      senderAvatarUrl: sender?.avatarUrl,
+      messageType: params.messageType,
+      body: params.body,
+      attachments: params.attachments,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const allMessages = this.get<Message[]>(STORAGE_KEYS.MESSAGES, INITIAL_MESSAGES);
+    this.set(STORAGE_KEYS.MESSAGES, [...allMessages, newMsg]);
+
+    // Update conversation last message timestamp & snippet
+    allConversations[convIndex].lastMessageAt = now;
+    allConversations[convIndex].updatedAt = now;
+    allConversations[convIndex].lastMessageSnippet =
+      params.messageType === 'TEXT'
+        ? params.body
+        : params.messageType === 'VOICE'
+        ? '🎤 Voice Message'
+        : params.messageType === 'IMAGE'
+        ? '📷 Image Attachment'
+        : '📎 File Attachment';
+
+    // Update sender's last_read_at
+    if (allConversations[convIndex].participants) {
+      const pIdx = allConversations[convIndex].participants!.findIndex(
+        (p) => p.userId === params.senderId
+      );
+      if (pIdx !== -1) {
+        allConversations[convIndex].participants![pIdx].lastReadAt = now;
+      }
+    }
+
+    this.set(STORAGE_KEYS.CONVERSATIONS, allConversations);
+    return newMsg;
+  }
+
+  public markConversationRead(conversationId: string, userId: string): void {
+    const allConversations = this.get<Conversation[]>(
+      STORAGE_KEYS.CONVERSATIONS,
+      INITIAL_CONVERSATIONS
+    );
+    const convIndex = allConversations.findIndex((c) => c.id === conversationId);
+    if (convIndex === -1) return;
+
+    const now = new Date().toISOString();
+    if (allConversations[convIndex].participants) {
+      const pIdx = allConversations[convIndex].participants!.findIndex(
+        (p) => p.userId === userId
+      );
+      if (pIdx !== -1) {
+        allConversations[convIndex].participants![pIdx].lastReadAt = now;
+        this.set(STORAGE_KEYS.CONVERSATIONS, allConversations);
+      }
+    }
+  }
+
+  public getTotalUnreadCount(userId: string): number {
+    const conversations = this.getConversations(userId);
+    return conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+  }
+
   public getBetaMetricsReport(): BetaMetricsReport {
     const users = this.getUsers();
     const projects = this.getProjects();
@@ -2410,3 +2909,4 @@ class MarketplaceStore {
 
 export const marketplaceStore = new MarketplaceStore();
 marketplaceStore.init();
+export const storage = marketplaceStore;

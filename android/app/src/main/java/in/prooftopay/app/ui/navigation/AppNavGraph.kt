@@ -20,9 +20,12 @@ import in.prooftopay.app.ui.screens.business.ManageApplicantsScreen
 import in.prooftopay.app.ui.screens.creator.*
 import in.prooftopay.app.ui.screens.onboarding.OnboardingScreen
 import in.prooftopay.app.ui.screens.splash.SplashScreen
+import in.prooftopay.app.ui.screens.chat.ChatConversationScreen
+import in.prooftopay.app.ui.screens.chat.ChatInboxScreen
 import in.prooftopay.app.viewmodel.AdminViewModel
 import in.prooftopay.app.viewmodel.AuthViewModel
 import in.prooftopay.app.viewmodel.BusinessViewModel
+import in.prooftopay.app.viewmodel.ChatViewModel
 import in.prooftopay.app.viewmodel.CreatorViewModel
 
 @Composable
@@ -31,7 +34,8 @@ fun AppNavGraph(
     authViewModel: AuthViewModel = viewModel(),
     creatorViewModel: CreatorViewModel = viewModel(),
     businessViewModel: BusinessViewModel = viewModel(),
-    adminViewModel: AdminViewModel = viewModel()
+    adminViewModel: AdminViewModel = viewModel(),
+    chatViewModel: ChatViewModel = viewModel()
 ) {
     val currentUser by authViewModel.currentUser.collectAsState()
 
@@ -309,5 +313,32 @@ fun AppNavGraph(
                 )
             }
         }
+
+        // Secure Chat & Messaging Subsystem Flow
+        composable(Screen.ChatInbox.route) {
+            if (currentUser != null) {
+                ChatInboxScreen(
+                    currentUser = currentUser!!,
+                    chatViewModel = chatViewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToConversation = { convId ->
+                        navController.navigate(Screen.ChatConversation.createRoute(convId))
+                    }
+                )
+            }
+        }
+
+        composable(Screen.ChatConversation.route) { backStackEntry ->
+            val convId = backStackEntry.arguments?.getString("conversationId") ?: ""
+            if (currentUser != null) {
+                ChatConversationScreen(
+                    conversationId = convId,
+                    currentUser = currentUser!!,
+                    chatViewModel = chatViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+        }
     }
 }
+

@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   GraduationCap
 } from 'lucide-react';
+import { ThemeToggle } from '../common/ThemeToggle';
 
 export type CreatorTabId =
   | 'overview'
@@ -322,6 +323,11 @@ export const CreatorWorkspace: React.FC<Props> = ({
               <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition" />
             </button>
 
+            <div className="pt-2 pb-1 flex items-center justify-between px-1 border-t border-slate-100 dark:border-slate-800/80">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Theme</span>
+              <ThemeToggle variant="segmented" showLabels={false} />
+            </div>
+
             {onLogout && (
               <button
                 onClick={onLogout}
@@ -350,6 +356,8 @@ export const CreatorWorkspace: React.FC<Props> = ({
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>100% Net Creator Pay Guaranteed</span>
             </div>
+
+            <ThemeToggle variant="dropdown" />
 
             <button
               onClick={() => onNavigate('browse')}

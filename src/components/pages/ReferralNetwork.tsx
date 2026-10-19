@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User, ReferralRecord, ReferralStats } from '../../types';
 import { marketplaceStore } from '../../lib/storage';
+import { Leaderboard } from '../common/Leaderboard';
 import {
   Users,
   Gift,
@@ -15,13 +16,16 @@ import {
   Award,
   ExternalLink,
   MessageSquare,
-  DollarSign
+  DollarSign,
+  Trophy,
+  Flame,
+  HelpCircle
 } from 'lucide-react';
 
 interface Props {
   currentUser: User | null;
   onNavigate: (view: string, param?: string) => void;
-  onOpenAuth: (mode?: 'login' | 'register_student' | 'register_business') => void;
+  onOpenAuth: (mode?: 'login' | 'register_student' | 'register_business' | 'register_recruiter') => void;
 }
 
 export const ReferralNetwork: React.FC<Props> = ({
@@ -30,6 +34,7 @@ export const ReferralNetwork: React.FC<Props> = ({
   onOpenAuth
 }) => {
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<'leaderboard' | 'activity' | 'perks'>('leaderboard');
 
   // Fallback demo user ID if not logged in
   const activeUserId = currentUser?.id || 'student-1';
@@ -176,63 +181,114 @@ export const ReferralNetwork: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* How It Works Tier Explanation */}
-        <div className="p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-6">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-indigo-500" />
-            <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
-              How Proof-to-Pay Referral Rewards Work
-            </h2>
-          </div>
+        {/* Tab Navigation */}
+        <div className="flex border-b border-slate-200 dark:border-slate-800 gap-2 sm:gap-6 overflow-x-auto text-xs font-semibold">
+          <button
+            onClick={() => setActiveTab('leaderboard')}
+            className={`pb-3 px-2 border-b-2 transition whitespace-nowrap flex items-center gap-2 ${
+              activeTab === 'leaderboard'
+                ? 'border-amber-500 text-amber-600 dark:text-amber-400 font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Trophy className="w-4 h-4 text-amber-500" />
+            <span>Top Referrers Leaderboard</span>
+          </button>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
-              <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 font-black text-sm flex items-center justify-center">
-                1
-              </div>
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white">For Student Creators</h3>
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                Invite fellow college creators. When your referred peer completes their first verified paid client deliverable, you receive <strong className="text-emerald-600 dark:text-emerald-400">₹500 INR direct bank payout</strong> and unlock the <strong className="text-indigo-600 dark:text-indigo-400">Community Scout</strong> badge.
-              </p>
-            </div>
+          <button
+            onClick={() => setActiveTab('activity')}
+            className={`pb-3 px-2 border-b-2 transition whitespace-nowrap flex items-center gap-2 ${
+              activeTab === 'activity'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Users className="w-4 h-4 text-indigo-500" />
+            <span>My Referral Activity ({referrals.length})</span>
+          </button>
 
-            <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
-              <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-black text-sm flex items-center justify-center">
-                2
-              </div>
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white">For Verified Businesses</h3>
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                Introduce other founders and businesses. When they post and settle their first student project, you unlock <strong className="text-blue-600 dark:text-blue-400">0% platform commission</strong> on your next project and ₹1,000 project hiring credit.
-              </p>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
-              <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center">
-                3
-              </div>
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white">For Tech Recruiters</h3>
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                Recommend other talent acquisition partners or agencies. Earn <strong className="text-indigo-600 dark:text-indigo-400">₹1,500 INR referral reward</strong> per hired creator placed through their curated talent collections.
-              </p>
-            </div>
-          </div>
+          <button
+            onClick={() => setActiveTab('perks')}
+            className={`pb-3 px-2 border-b-2 transition whitespace-nowrap flex items-center gap-2 ${
+              activeTab === 'perks'
+                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-emerald-500" />
+            <span>Rewards & Ambassador Tiers</span>
+          </button>
         </div>
 
-        {/* Referrals Activity Table */}
-        <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                Your Referral Activity
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Live status of peers and partners who registered with your invite code
-              </p>
+        {/* Tab 1: Leaderboard View */}
+        {activeTab === 'leaderboard' && (
+          <Leaderboard
+            currentUser={currentUser}
+            onOpenAuth={onOpenAuth}
+            onNavigate={onNavigate}
+          />
+        )}
+
+        {/* Tab 2: Rewards & Ambassador Tiers */}
+        {activeTab === 'perks' && (
+          <div className="p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-6">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-indigo-500" />
+              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                How Proof-to-Pay Referral Rewards Work
+              </h2>
             </div>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-              {referrals.length} {referrals.length === 1 ? 'Referral' : 'Referrals'}
-            </span>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 font-black text-sm flex items-center justify-center">
+                  1
+                </div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">For Student Creators</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Invite fellow college creators. When your referred peer completes their first verified paid client deliverable, you receive <strong className="text-emerald-600 dark:text-emerald-400">₹500 INR direct bank payout</strong> and unlock the <strong className="text-indigo-600 dark:text-indigo-400">Community Scout</strong> badge.
+                </p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-black text-sm flex items-center justify-center">
+                  2
+                </div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">For Verified Businesses</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Introduce other founders and businesses. When they post and settle their first student project, you unlock <strong className="text-blue-600 dark:text-blue-400">0% platform commission</strong> on your next project and ₹1,000 project hiring credit.
+                </p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center">
+                  3
+                </div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">For Tech Recruiters</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Recommend other talent acquisition partners or agencies. Earn <strong className="text-indigo-600 dark:text-indigo-400">₹1,500 INR referral reward</strong> per hired creator placed through their curated talent collections.
+                </p>
+              </div>
+            </div>
           </div>
+        )}
+
+        {/* Tab 3: Referrals Activity Table */}
+        {activeTab === 'activity' && (
+          <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                  Your Referral Activity
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Live status of peers and partners who registered with your invite code
+                </p>
+              </div>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                {referrals.length} {referrals.length === 1 ? 'Referral' : 'Referrals'}
+              </span>
+            </div>
 
           {referrals.length === 0 ? (
             <div className="p-8 text-center border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl text-xs text-slate-500">
@@ -313,6 +369,7 @@ export const ReferralNetwork: React.FC<Props> = ({
             </div>
           )}
         </div>
+      )}
 
         {/* Security & Audit Notice */}
         <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 flex items-start gap-3">

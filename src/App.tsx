@@ -32,6 +32,8 @@ import { RecruiterPortal } from './components/pages/RecruiterPortal';
 import { ReferralNetwork } from './components/pages/ReferralNetwork';
 import { CreatorWorkspace, CreatorTabId } from './components/layout/CreatorWorkspace';
 import { BusinessWorkspace, BusinessTabId } from './components/layout/BusinessWorkspace';
+import { ChatModal } from './components/chat/ChatModal';
+import { storage } from './lib/storage';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -65,6 +67,54 @@ export default function App() {
     isOpen: false,
     targetTitle: 'Project or User',
   });
+
+  // Secure Chat & Messaging State
+  const [chatState, setChatState] = useState<{
+    isOpen: boolean;
+    initialConversationId?: string;
+    targetUser?: { id: string; name: string; role: 'STUDENT' | 'BUSINESS' | 'ADMIN' | 'RECRUITER' };
+    targetProjectId?: string;
+    targetOfferId?: string;
+  }>({ isOpen: false });
+
+  const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setUnreadChatCount(0);
+      return;
+    }
+    const updateUnread = () => {
+      try {
+        const count = storage.getTotalUnreadCount(currentUser.id);
+        setUnreadChatCount(count);
+      } catch {
+        // storage fallback
+      }
+    };
+    updateUnread();
+    const interval = setInterval(updateUnread, 3000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
+  const handleOpenChat = (params?: {
+    conversationId?: string;
+    targetUser?: { id: string; name: string; role: 'STUDENT' | 'BUSINESS' | 'ADMIN' | 'RECRUITER' };
+    targetProjectId?: string;
+    targetOfferId?: string;
+  }) => {
+    if (!currentUser) {
+      handleOpenAuth('login');
+      return;
+    }
+    setChatState({
+      isOpen: true,
+      initialConversationId: params?.conversationId,
+      targetUser: params?.targetUser,
+      targetProjectId: params?.targetProjectId,
+      targetOfferId: params?.targetOfferId,
+    });
+  };
 
   // Load project listings
   const projects = marketplaceStore.getProjects();
@@ -277,6 +327,7 @@ export default function App() {
             onBack={() => handleNavigate('browse')}
             onOpenAuth={handleOpenAuth}
             onNavigate={handleNavigate}
+            onOpenChat={handleOpenChat}
           />
         ) : (
           <div className="p-12 text-center">Project not found</div>
@@ -344,6 +395,7 @@ export default function App() {
               onLogout={handleLogout}
               controlledTab={creatorTab === 'browse' ? 'overview' : creatorTab}
               onTabChange={(tab) => setCreatorTab(tab as any)}
+              onOpenChat={handleOpenChat}
             />
           </CreatorWorkspace>
         );
@@ -412,6 +464,7 @@ export default function App() {
               onLogout={handleLogout}
               controlledTab={businessTab}
               onTabChange={(tab) => setBusinessTab(tab as any)}
+              onOpenChat={handleOpenChat}
             />
           </BusinessWorkspace>
         );
@@ -594,6 +647,8 @@ export default function App() {
             onNavigate={handleNavigate}
             onOpenAuth={handleOpenAuth}
             onLogout={handleLogout}
+            onOpenChat={handleOpenChat}
+            unreadChatCount={unreadChatCount}
           />
 
           <main className="flex-1">
@@ -645,6 +700,21 @@ export default function App() {
         targetTitle={abuseModalState.targetTitle}
         onClose={() => setAbuseModalState({ isOpen: false, targetTitle: 'Project or User' })}
       />
+
+      {/* Secure Chat & Messaging Subsystem Modal */}
+      {currentUser && (
+        <ChatModal
+          isOpen={chatState.isOpen}
+          onClose={() => setChatState((prev) => ({ ...prev, isOpen: false }))}
+          currentUser={currentUser}
+          initialConversationId={chatState.initialConversationId}
+          targetUser={chatState.targetUser}
+          targetProjectId={chatState.targetProjectId}
+          targetOfferId={chatState.targetOfferId}
+          onNavigateToProject={(projId) => handleNavigate('project_detail', projId)}
+        />
+      )}
+
     </div>
   );
 }

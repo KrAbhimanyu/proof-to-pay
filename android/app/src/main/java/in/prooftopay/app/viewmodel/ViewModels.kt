@@ -283,3 +283,222 @@ class AdminViewModel : ViewModel() {
         DisputeRepository.resolveDispute(disputeId, resolutionNotes)
     }
 }
+
+class ChatViewModel : ViewModel() {
+    val conversations: StateFlow<List<Conversation>> = ChatRepository.conversations
+
+    private val _activeConversation = MutableStateFlow<Conversation?>(null)
+    val activeConversation: StateFlow<Conversation?> = _activeConversation.asStateFlow()
+
+    private val _messages = MutableStateFlow<List<Message>>(emptyList())
+    val messages: StateFlow<List<Message>> = _messages.asStateFlow()
+
+    private val _isLoadingMessages = MutableStateFlow(false)
+    val isLoadingMessages: StateFlow<Boolean> = _isLoadingMessages.asStateFlow()
+
+    private val _isSending = MutableStateFlow(false)
+    val isSending: StateFlow<Boolean> = _isSending.asStateFlow()
+
+    private val _isUploading = MutableStateFlow(false)
+    val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    private var activeSubscriptionCleanup: (() -> Unit)? = null
+
+    fun clearError() {
+        _errorMessage.value = null
+    }
+
+    fun selectConversation(conversationId: String, currentUserId: String? = null) {
+        val conv = conversations.value.find { it.id == conversationId }
+        _activeConversation.value = conv
+        _messages.value = ChatRepository.getMessages(conversationId)
+        if (currentUserId != null) {
+            ChatRepository.markConversationRead(conversationId, currentUserId)
+        }
+
+        activeSubscriptionCleanup?.invoke()
+        activeSubscriptionCleanup = null
+
+        viewModelScope.launch {
+            _isLoadingMessages.value = true
+            val fetchRes = ChatRepository.fetchMessages(conversationId)
+            _isLoadingMessages.value = false
+            fetchRes.onSuccess { msgs ->
+                _messages.value = msgs
+            }.onFailure { err ->
+                if (SupabaseClientProvider.isConfigured) {
+                    _errorMessage.value = "Failed to sync messages: ${err.message}"
+                }
+            }
+
+            activeSubscriptionCleanup = ChatRepository.subscribeToConversation(
+                conversationId = conversationId,
+                scope = viewModelScope,
+                onNewMessage = {
+                    _messages.value = ChatRepository.getMessages(conversationId)
+                }
+            )
+        }
+    }
+
+    fun leaveConversation(conversationId: String) {
+        activeSubscriptionCleanup?.invoke()
+        activeSubscriptionCleanup = null
+    }
+
+    override fun onCleared() {
+        activeSubscriptionCleanup?.invoke()
+        activeSubscriptionCleanup = null
+        super.onCleared()
+    }
+
+    fun sendMessage(conversationId: String, sender: UserProfile, text: String) {
+        if (text.isBlank()) return
+        if (sender.isSuspended) {
+            _errorMessage.value = "Your account is currently suspended. Messaging is disabled."
+            return
+        }
+
+        viewModelScope.launch {
+            _isSending.value = true
+            _errorMessage.value = null
+            val res = ChatRepository.sendMessage(
+                conversationId = conversationId,
+                senderId = sender.id,
+                senderName = sender.name,
+                senderRole = sender.role,
+                messageType = MessageType.TEXT,
+                body = text.trim()
+            )
+            _isSending.value = false
+            if (res.isSuccess) {
+                _messages.value = ChatRepository.getMessages(conversationId)
+            } else {
+                _errorMessage.value = res.exceptionOrNull()?.message ?: "Failed to send message."
+            }
+        }
+    }
+
+    fun sendRealVoiceNote(
+        conversationId: String,
+        sender: UserProfile,
+        audioBytes: ByteArray,
+        durationSeconds: Int,
+        fileName: String = "VoiceNote_${System.currentTimeMillis()}.m4a"
+    ) {
+        if (sender.isSuspended) {
+            _errorMessage.value = "Your account is currently suspended. Voice messaging is disabled."
+            return
+        }
+        if (durationSeconds <= 0 || durationSeconds > 180) {
+            _errorMessage.value = "Voice note duration must be between 1 and 180 seconds."
+            return
+        }
+
+        viewModelScope.launch {
+            _isUploading.value = true
+            _errorMessage.value = null
+            val uploadRes = ChatRepository.uploadAttachment(
+                conversationId = conversationId,
+                fileBytes = audioBytes,
+                fileName = fileName,
+                mimeType = "audio/mp4",
+                voiceDurationSeconds = durationSeconds
+            )
+            _isUploading.value = false
+
+            uploadRes.onSuccess { attachment ->
+                val sendRes = ChatRepository.sendMessage(
+                    conversationId = conversationId,
+                    senderId = sender.id,
+                    senderName = sender.name,
+                    senderRole = sender.role,
+                    messageType = MessageType.VOICE,
+                    body = "Voice note (${durationSeconds}s)",
+                    attachments = listOf(attachment)
+                )
+                if (sendRes.isSuccess) {
+                    _messages.value = ChatRepository.getMessages(conversationId)
+                } else {
+                    _errorMessage.value = sendRes.exceptionOrNull()?.message ?: "Failed to record voice message."
+                }
+            }.onFailure { err ->
+                _errorMessage.value = err.message ?: "Failed to upload voice note."
+            }
+        }
+    }
+
+    fun sendAttachment(
+        conversationId: String,
+        sender: UserProfile,
+        fileBytes: ByteArray,
+        fileName: String,
+        mimeType: String
+    ) {
+        if (sender.isSuspended) {
+            _errorMessage.value = "Your account is currently suspended. File uploads are disabled."
+            return
+        }
+        if (fileBytes.size > 20 * 1024 * 1024) {
+            _errorMessage.value = "File size exceeds 20 MB limit."
+            return
+        }
+
+        viewModelScope.launch {
+            _isUploading.value = true
+            _errorMessage.value = null
+            val isImage = mimeType.startsWith("image/")
+            val messageType = if (isImage) MessageType.IMAGE else MessageType.FILE
+
+            val uploadRes = ChatRepository.uploadAttachment(
+                conversationId = conversationId,
+                fileBytes = fileBytes,
+                fileName = fileName,
+                mimeType = mimeType
+            )
+            _isUploading.value = false
+
+            uploadRes.onSuccess { attachment ->
+                val sendRes = ChatRepository.sendMessage(
+                    conversationId = conversationId,
+                    senderId = sender.id,
+                    senderName = sender.name,
+                    senderRole = sender.role,
+                    messageType = messageType,
+                    body = if (isImage) null else fileName,
+                    attachments = listOf(attachment)
+                )
+                if (sendRes.isSuccess) {
+                    _messages.value = ChatRepository.getMessages(conversationId)
+                } else {
+                    _errorMessage.value = sendRes.exceptionOrNull()?.message ?: "Failed to deliver attachment."
+                }
+            }.onFailure { err ->
+                _errorMessage.value = err.message ?: "Failed to upload attachment."
+            }
+        }
+    }
+
+    fun startPreProjectChat(
+        businessId: String,
+        businessName: String,
+        creatorId: String,
+        creatorName: String,
+        projectId: String?,
+        projectTitle: String?
+    ): String {
+        val conv = ChatRepository.getOrCreatePreProjectConversation(
+            businessId = businessId,
+            businessName = businessName,
+            creatorId = creatorId,
+            creatorName = creatorName,
+            projectId = projectId,
+            projectTitle = projectTitle
+        )
+        selectConversation(conv.id)
+        return conv.id
+    }
+}

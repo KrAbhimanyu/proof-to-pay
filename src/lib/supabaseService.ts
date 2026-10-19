@@ -15,6 +15,9 @@ import {
   ProofPassportItem,
   ScopeChangeRequest,
   WorkTrailEvent,
+  Conversation,
+  Message,
+  MessageAttachment,
 } from '../types';
 import { getSupabaseConfig } from './supabaseClient';
 
@@ -448,6 +451,549 @@ class SupabaseService {
       respondedAt: row.responded_at,
       respondedByUserId: row.responded_by_user_id,
     }));
+  }
+
+  // --- Secure Messaging Subsystem ---
+  public async getConversations(userId: string): Promise<Conversation[]> {
+    const sb = this.getClient();
+    if (!sb) return [];
+
+    try {
+      const { data, error } = await sb
+        .from('conversations')
+        .select(`
+          id,
+          conversation_type,
+          business_id,
+          creator_id,
+          project_id,
+          project_offer_id,
+          status,
+          created_by,
+          last_message_at,
+          created_at,
+          updated_at,
+          participants:conversation_participants(id, user_id, joined_at, last_read_at, is_muted),
+          business:profiles!business_id(name, avatar_url),
+          creator:profiles!creator_id(name, avatar_url),
+          project:projects(title)
+        `)
+        .or(`business_id.eq.${userId},creator_id.eq.${userId}`)
+        .order('last_message_at', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => ({
+        id: row.id,
+        conversationType: row.conversation_type,
+        businessId: row.business_id,
+        businessName: row.business?.name,
+        businessAvatarUrl: row.business?.avatar_url,
+        creatorId: row.creator_id,
+        creatorName: row.creator?.name,
+        creatorAvatarUrl: row.creator?.avatar_url,
+        projectId: row.project_id,
+        projectTitle: row.project?.title,
+        projectOfferId: row.project_offer_id,
+        status: row.status,
+        createdBy: row.created_by,
+        lastMessageAt: row.last_message_at,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        participants: (row.participants || []).map((p: any) => ({
+          id: p.id,
+          conversationId: row.id,
+          userId: p.user_id,
+          joinedAt: p.joined_at,
+          lastReadAt: p.last_read_at,
+          isMuted: p.is_muted
+        }))
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  public async getOrCreatePreProjectConversation(
+    businessId: string,
+    creatorId: string,
+    createdById: string,
+    projectId?: string
+  ): Promise<Conversation | null> {
+    const sb = this.getClient();
+    if (!sb) return null;
+
+    try {
+      let query = sb
+        .from('conversations')
+        .select(`
+          id,
+          conversation_type,
+          business_id,
+          creator_id,
+          project_id,
+          project_offer_id,
+          status,
+          created_by,
+          last_message_at,
+          created_at,
+          updated_at,
+          business:profiles!business_id(name, avatar_url),
+          creator:profiles!creator_id(name, avatar_url),
+          project:projects(title)
+        `)
+        .eq('conversation_type', 'PRE_PROJECT')
+        .eq('business_id', businessId)
+        .eq('creator_id', creatorId);
+
+      if (projectId) {
+        query = query.eq('project_id', projectId);
+      } else {
+        query = query.is('project_id', null);
+      }
+
+      const { data: existing, error: existErr } = await query.maybeSingle();
+      if (!existErr && existing) {
+        const ex = existing as any;
+        return {
+          id: ex.id,
+          conversationType: ex.conversation_type,
+          businessId: ex.business_id,
+          businessName: ex.business?.name,
+          businessAvatarUrl: ex.business?.avatar_url,
+          creatorId: ex.creator_id,
+          creatorName: ex.creator?.name,
+          creatorAvatarUrl: ex.creator?.avatar_url,
+          projectId: ex.project_id,
+          projectTitle: ex.project?.title,
+          projectOfferId: ex.project_offer_id,
+          status: ex.status,
+          createdBy: ex.created_by,
+          lastMessageAt: ex.last_message_at,
+          createdAt: ex.created_at,
+          updatedAt: ex.updated_at
+        };
+      }
+
+      const { data: inserted, error: insertErr } = await sb
+        .from('conversations')
+        .insert({
+          conversation_type: 'PRE_PROJECT',
+          business_id: businessId,
+          creator_id: creatorId,
+          project_id: projectId || null,
+          created_by: createdById,
+          status: 'ACTIVE'
+        })
+        .select(`
+          id,
+          conversation_type,
+          business_id,
+          creator_id,
+          project_id,
+          project_offer_id,
+          status,
+          created_by,
+          last_message_at,
+          created_at,
+          updated_at,
+          business:profiles!business_id(name, avatar_url),
+          creator:profiles!creator_id(name, avatar_url),
+          project:projects(title)
+        `)
+        .single();
+
+      if (insertErr || !inserted) return null;
+
+      const ins = inserted as any;
+      return {
+        id: ins.id,
+        conversationType: ins.conversation_type,
+        businessId: ins.business_id,
+        businessName: ins.business?.name,
+        businessAvatarUrl: ins.business?.avatar_url,
+        creatorId: ins.creator_id,
+        creatorName: ins.creator?.name,
+        creatorAvatarUrl: ins.creator?.avatar_url,
+        projectId: ins.project_id,
+        projectTitle: ins.project?.title,
+        projectOfferId: ins.project_offer_id,
+        status: ins.status,
+        createdBy: ins.created_by,
+        lastMessageAt: ins.last_message_at,
+        createdAt: ins.created_at,
+        updatedAt: ins.updated_at
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  public async getOrCreateProjectConversation(offerId: string): Promise<Conversation | null> {
+    const sb = this.getClient();
+    if (!sb) return null;
+
+    try {
+      const { data: existing } = await sb
+        .from('conversations')
+        .select(`
+          id,
+          conversation_type,
+          business_id,
+          creator_id,
+          project_id,
+          project_offer_id,
+          status,
+          created_by,
+          last_message_at,
+          created_at,
+          updated_at,
+          business:profiles!business_id(name, avatar_url),
+          creator:profiles!creator_id(name, avatar_url),
+          project:projects(title)
+        `)
+        .eq('project_offer_id', offerId)
+        .maybeSingle();
+
+      if (existing) {
+        const ex = existing as any;
+        return {
+          id: ex.id,
+          conversationType: ex.conversation_type,
+          businessId: ex.business_id,
+          businessName: ex.business?.name,
+          businessAvatarUrl: ex.business?.avatar_url,
+          creatorId: ex.creator_id,
+          creatorName: ex.creator?.name,
+          creatorAvatarUrl: ex.creator?.avatar_url,
+          projectId: ex.project_id,
+          projectTitle: ex.project?.title,
+          projectOfferId: ex.project_offer_id,
+          status: ex.status,
+          createdBy: ex.created_by,
+          lastMessageAt: ex.last_message_at,
+          createdAt: ex.created_at,
+          updatedAt: ex.updated_at
+        };
+      }
+
+      const { data: offer, error: offerErr } = await sb
+        .from('project_offers')
+        .select('id, business_id, student_id, project_id, status')
+        .eq('id', offerId)
+        .single();
+
+      if (offerErr || !offer || offer.status !== 'ACCEPTED') {
+        return null;
+      }
+
+      const { data: inserted, error: insertErr } = await sb
+        .from('conversations')
+        .insert({
+          conversation_type: 'PROJECT',
+          business_id: offer.business_id,
+          creator_id: offer.student_id,
+          project_id: offer.project_id,
+          project_offer_id: offer.id,
+          created_by: offer.business_id,
+          status: 'ACTIVE'
+        })
+        .select(`
+          id,
+          conversation_type,
+          business_id,
+          creator_id,
+          project_id,
+          project_offer_id,
+          status,
+          created_by,
+          last_message_at,
+          created_at,
+          updated_at,
+          business:profiles!business_id(name, avatar_url),
+          creator:profiles!creator_id(name, avatar_url),
+          project:projects(title)
+        `)
+        .single();
+
+      if (insertErr || !inserted) return null;
+
+      const ins = inserted as any;
+      return {
+        id: ins.id,
+        conversationType: ins.conversation_type,
+        businessId: ins.business_id,
+        businessName: ins.business?.name,
+        businessAvatarUrl: ins.business?.avatar_url,
+        creatorId: ins.creator_id,
+        creatorName: ins.creator?.name,
+        creatorAvatarUrl: ins.creator?.avatar_url,
+        projectId: ins.project_id,
+        projectTitle: ins.project?.title,
+        projectOfferId: ins.project_offer_id,
+        status: ins.status,
+        createdBy: ins.created_by,
+        lastMessageAt: ins.last_message_at,
+        createdAt: ins.created_at,
+        updatedAt: ins.updated_at
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  public async getMessages(conversationId: string): Promise<Message[]> {
+    const sb = this.getClient();
+    if (!sb) return [];
+
+    try {
+      const { data, error } = await sb
+        .from('messages')
+        .select(`
+          id,
+          conversation_id,
+          sender_id,
+          message_type,
+          body,
+          is_deleted,
+          created_at,
+          updated_at,
+          sender:profiles!sender_id(name, role, avatar_url),
+          attachments:message_attachments(*)
+        `)
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+
+      if (error || !data) return [];
+
+      return data.map((row: any) => ({
+        id: row.id,
+        conversationId: row.conversation_id,
+        senderId: row.sender_id,
+        senderName: row.sender?.name,
+        senderRole: row.sender?.role,
+        senderAvatarUrl: row.sender?.avatar_url,
+        messageType: row.message_type,
+        body: row.body,
+        isDeleted: row.is_deleted,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        attachments: (row.attachments || []).map((att: any) => ({
+          id: att.id,
+          messageId: att.message_id,
+          conversationId: att.conversation_id,
+          storagePath: att.storage_path,
+          fileName: att.file_name,
+          fileSizeBytes: Number(att.file_size_bytes),
+          mimeType: att.mime_type,
+          voiceDurationSeconds: att.voice_duration_seconds,
+          createdAt: att.created_at
+        }))
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  public async sendMessage(params: {
+    conversationId: string;
+    senderId: string;
+    messageType: string;
+    body?: string;
+    attachments?: any[];
+  }): Promise<Message | null> {
+    const sb = this.getClient();
+    if (!sb) return null;
+
+    try {
+      // Format attachment metadata payload for atomic transactional RPC
+      const rpcAttachments = (params.attachments || []).map((att: any) => ({
+        storage_path: att.storagePath || att.storage_path,
+        file_name: att.fileName || att.file_name,
+        file_size_bytes: Number(att.fileSizeBytes ?? att.file_size_bytes),
+        mime_type: att.mimeType || att.mime_type,
+        voice_duration_seconds: att.voiceDurationSeconds ?? att.voice_duration_seconds ?? null
+      }));
+
+      // Database-side transactional RPC: inserts message and attachments in single transaction with rollback
+      const { data, error } = await sb.rpc('send_chat_message', {
+        p_conversation_id: params.conversationId,
+        p_message_type: params.messageType,
+        p_body: params.body || null,
+        p_attachments: rpcAttachments
+      });
+
+      if (error || !data) {
+        console.error('Transactional send_chat_message RPC failed:', error?.message || 'No data returned');
+
+        // Cleanup pre-uploaded storage objects if database RPC fails or rolls back
+        if (params.attachments && params.attachments.length > 0) {
+          const pathsToRemove = params.attachments
+            .map((att: any) => att.storagePath || att.storage_path)
+            .filter(Boolean);
+          if (pathsToRemove.length > 0) {
+            try {
+              await sb.storage.from('chat_attachments').remove(pathsToRemove);
+            } catch (storageCleanupErr) {
+              console.warn('Storage cleanup warning after RPC rollback:', storageCleanupErr);
+            }
+          }
+        }
+
+        return null;
+      }
+
+      const savedAttachments: MessageAttachment[] = ((data.attachments as any[]) || []).map((att: any) => ({
+        id: att.id,
+        messageId: data.id,
+        conversationId: params.conversationId,
+        storagePath: att.storage_path,
+        fileName: att.file_name,
+        fileSizeBytes: Number(att.file_size_bytes),
+        mimeType: att.mime_type,
+        voiceDurationSeconds: att.voice_duration_seconds,
+        createdAt: att.created_at
+      }));
+
+      return {
+        id: data.id,
+        conversationId: data.conversation_id,
+        senderId: data.sender_id,
+        messageType: data.message_type,
+        body: data.body,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        attachments: savedAttachments
+      };
+    } catch (err) {
+      console.error('Unexpected error in sendMessage RPC:', err);
+      return null;
+    }
+  }
+
+  public async uploadChatAttachment(
+    conversationId: string,
+    file: Blob | File,
+    fileName: string,
+    mimeType: string,
+    voiceDurationSeconds?: number
+  ): Promise<MessageAttachment | null> {
+    const sb = this.getClient();
+    if (!sb) return null;
+
+    try {
+      const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storagePath = `conversations/${conversationId}/${Date.now()}_${cleanName}`;
+
+      const { error: uploadError } = await sb.storage
+        .from('chat_attachments')
+        .upload(storagePath, file, { contentType: mimeType, upsert: false });
+
+      if (uploadError) {
+        console.warn('Chat storage upload warning:', uploadError.message);
+        return null;
+      }
+
+      // Generate a short-lived signed URL for immediate preview (1 hour expiry)
+      let initialSignedUrl: string | undefined = undefined;
+      const { data: signedData } = await sb.storage
+        .from('chat_attachments')
+        .createSignedUrl(storagePath, 3600);
+      if (signedData?.signedUrl) {
+        initialSignedUrl = signedData.signedUrl;
+      }
+
+      return {
+        id: `att-${Date.now()}`,
+        messageId: '',
+        conversationId,
+        storagePath,
+        fileName,
+        fileSizeBytes: file.size,
+        mimeType,
+        voiceDurationSeconds,
+        downloadUrl: initialSignedUrl,
+        createdAt: new Date().toISOString()
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  public async createSignedAttachmentUrl(
+    storagePath: string,
+    expiresInSeconds: number = 3600
+  ): Promise<string | null> {
+    const sb = this.getClient();
+    if (!sb) return null;
+
+    try {
+      const { data, error } = await sb.storage
+        .from('chat_attachments')
+        .createSignedUrl(storagePath, expiresInSeconds);
+
+      if (error || !data) return null;
+      return data.signedUrl;
+    } catch {
+      return null;
+    }
+  }
+
+
+  public async markConversationRead(conversationId: string, userId: string): Promise<void> {
+    const sb = this.getClient();
+    if (!sb) return;
+
+    try {
+      await sb
+        .from('conversation_participants')
+        .update({ last_read_at: new Date().toISOString() })
+        .eq('conversation_id', conversationId)
+        .eq('user_id', userId);
+    } catch {
+      // Non-blocking
+    }
+  }
+
+  public subscribeToConversation(
+    conversationId: string,
+    onNewMessage: (msg: Message) => void
+  ): () => void {
+    const sb = this.getClient();
+    if (!sb) return () => {};
+
+    try {
+      const channel = sb
+        .channel(`chat_${conversationId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `conversation_id=eq.${conversationId}`
+          },
+          (payload) => {
+            const row = payload.new as any;
+            onNewMessage({
+              id: row.id,
+              conversationId: row.conversation_id,
+              senderId: row.sender_id,
+              messageType: row.message_type,
+              body: row.body,
+              createdAt: row.created_at,
+              updatedAt: row.updated_at
+            });
+          }
+        )
+        .subscribe();
+
+      return () => {
+        sb.removeChannel(channel);
+      };
+    } catch {
+      return () => {};
+    }
   }
 
   // --- Test connection ---

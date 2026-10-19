@@ -26,6 +26,7 @@ import in.prooftopay.app.theme.*
 import in.prooftopay.app.ui.components.CreatorBottomBar
 import in.prooftopay.app.ui.components.ProjectCard
 import in.prooftopay.app.ui.components.ProofTopBar
+import in.prooftopay.app.ui.components.ThemeSelectorCard
 import in.prooftopay.app.viewmodel.AuthViewModel
 import in.prooftopay.app.viewmodel.CreatorViewModel
 
@@ -1108,6 +1109,8 @@ fun CreatorSettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            ThemeSelectorCard()
+
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)

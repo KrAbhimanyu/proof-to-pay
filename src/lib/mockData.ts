@@ -16,7 +16,9 @@ import {
   ScopeChangeRequest,
   RecruiterProfile,
   TalentCollection,
-  ReferralRecord
+  ReferralRecord,
+  Conversation,
+  Message
 } from '../types';
 
 export const INITIAL_USERS: User[] = [
@@ -898,6 +900,79 @@ export const INITIAL_REFERRAL_RECORDS: ReferralRecord[] = [
     milestoneTitle: 'First verified client project completed (₹12,000)'
   },
   {
+    id: 'ref-1b',
+    referrerId: 'student-1',
+    referrerRole: 'STUDENT',
+    refereeName: 'Tanvi Mathur',
+    refereeEmail: 'tanvi.mathur@nsut.ac.in',
+    refereeRole: 'STUDENT',
+    status: 'ACTIVE_MILESTONE',
+    rewardAmountINR: 500,
+    rewardType: 'CASH_INR',
+    referralCode: 'AARAV2026',
+    createdAt: '2026-08-28T16:00:00.000Z',
+    activatedAt: '2026-09-12T11:30:00.000Z',
+    milestoneTitle: 'Full-stack dashboard milestone delivered (₹18,000)'
+  },
+  {
+    id: 'ref-1c',
+    referrerId: 'student-1',
+    referrerRole: 'STUDENT',
+    refereeName: 'Kabir Mehta',
+    refereeEmail: 'kabir.mehta@dtu.ac.in',
+    refereeRole: 'STUDENT',
+    status: 'SIGNED_UP',
+    rewardAmountINR: 500,
+    rewardType: 'CASH_INR',
+    referralCode: 'AARAV2026',
+    createdAt: '2026-09-14T09:15:00.000Z',
+    milestoneTitle: 'Profile setup complete, currently drafting first proposal'
+  },
+  {
+    id: 'ref-3',
+    referrerId: 'recruiter-1',
+    referrerRole: 'RECRUITER',
+    refereeName: 'Arjun Verma',
+    refereeEmail: 'arjun.verma@techrecruits.co',
+    refereeRole: 'RECRUITER',
+    status: 'ACTIVE_MILESTONE',
+    rewardAmountINR: 1500,
+    rewardType: 'CASH_INR',
+    referralCode: 'RHEA-TALENT-2026',
+    createdAt: '2026-09-01T09:30:00.000Z',
+    activatedAt: '2026-09-15T10:00:00.000Z',
+    milestoneTitle: 'Placed first React candidate via curated collection'
+  },
+  {
+    id: 'ref-3b',
+    referrerId: 'recruiter-1',
+    referrerRole: 'RECRUITER',
+    refereeName: 'Priyanshi Sen',
+    refereeEmail: 'priyanshi@elevatetalent.in',
+    refereeRole: 'RECRUITER',
+    status: 'ACTIVE_MILESTONE',
+    rewardAmountINR: 1500,
+    rewardType: 'CASH_INR',
+    referralCode: 'RHEA-TALENT-2026',
+    createdAt: '2026-09-08T14:20:00.000Z',
+    activatedAt: '2026-09-22T17:45:00.000Z',
+    milestoneTitle: 'Recruited 2 student UI/UX designers from showcase cohort'
+  },
+  {
+    id: 'ref-3c',
+    referrerId: 'recruiter-1',
+    referrerRole: 'RECRUITER',
+    refereeName: 'Rohan Deshmukh',
+    refereeEmail: 'rohan.d@hiringhub.org',
+    refereeRole: 'RECRUITER',
+    status: 'SIGNED_UP',
+    rewardAmountINR: 1500,
+    rewardType: 'CASH_INR',
+    referralCode: 'RHEA-TALENT-2026',
+    createdAt: '2026-09-20T11:00:00.000Z',
+    milestoneTitle: 'Invited & onboarded partner account'
+  },
+  {
     id: 'ref-2',
     referrerId: 'business-1',
     referrerRole: 'BUSINESS',
@@ -914,17 +989,239 @@ export const INITIAL_REFERRAL_RECORDS: ReferralRecord[] = [
     milestoneTitle: 'First project posted and milestone settled'
   },
   {
-    id: 'ref-3',
-    referrerId: 'recruiter-1',
-    referrerRole: 'RECRUITER',
-    refereeName: 'Arjun Verma',
-    refereeEmail: 'arjun.verma@techrecruits.co',
-    refereeRole: 'RECRUITER',
+    id: 'ref-2b',
+    referrerId: 'business-1',
+    referrerRole: 'BUSINESS',
+    refereeName: 'Nexus Cloud Innovations',
+    refereeEmail: 'founder@nexuscloud.in',
+    refereeRole: 'BUSINESS',
     status: 'SIGNED_UP',
-    rewardAmountINR: 1500,
+    rewardAmountINR: 1000,
+    rewardType: 'COMMISSION_DISCOUNT',
+    referralCode: 'SIDDHARTH2026',
+    createdAt: '2026-09-10T12:00:00.000Z',
+    milestoneTitle: 'Business verification pending'
+  },
+  {
+    id: 'ref-4',
+    referrerId: 'student-2',
+    referrerRole: 'STUDENT',
+    refereeName: 'Dhruv Patel',
+    refereeEmail: 'dhruv.patel@iitr.ac.in',
+    refereeRole: 'STUDENT',
+    status: 'ACTIVE_MILESTONE',
+    rewardAmountINR: 500,
     rewardType: 'CASH_INR',
-    referralCode: 'RHEA-TALENT-2026',
-    createdAt: '2026-09-10T09:30:00.000Z',
-    milestoneTitle: 'Signed up via invitation'
+    referralCode: 'ANANYA2026',
+    createdAt: '2026-08-25T13:00:00.000Z',
+    activatedAt: '2026-09-18T15:20:00.000Z',
+    milestoneTitle: 'Brand packaging vector illustrations delivered'
+  },
+  {
+    id: 'ref-4b',
+    referrerId: 'student-2',
+    referrerRole: 'STUDENT',
+    refereeName: 'Meera Rao',
+    refereeEmail: 'meera.rao@nid.edu',
+    refereeRole: 'STUDENT',
+    status: 'SIGNED_UP',
+    rewardAmountINR: 500,
+    rewardType: 'CASH_INR',
+    referralCode: 'ANANYA2026',
+    createdAt: '2026-09-19T10:30:00.000Z',
+    milestoneTitle: 'Joined design studio network'
+  },
+  {
+    id: 'ref-5',
+    referrerId: 'business-2',
+    referrerRole: 'BUSINESS',
+    refereeName: 'GreenPulse Superfoods',
+    refereeEmail: 'connect@greenpulse.in',
+    refereeRole: 'BUSINESS',
+    status: 'ACTIVE_MILESTONE',
+    rewardAmountINR: 1000,
+    rewardType: 'COMMISSION_DISCOUNT',
+    referralCode: 'KAVITA2026',
+    createdAt: '2026-08-10T15:00:00.000Z',
+    activatedAt: '2026-08-30T12:00:00.000Z',
+    milestoneTitle: 'Completed e-commerce website redesign project'
+  }
+];
+
+export const INITIAL_CONVERSATIONS: Conversation[] = [
+  {
+    id: 'conv-pre-1',
+    conversationType: 'PRE_PROJECT',
+    businessId: 'business-1',
+    businessName: 'Siddharth Menon (HyperFlow Labs)',
+    businessAvatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=240&auto=format&fit=crop&q=80',
+    creatorId: 'student-1',
+    creatorName: 'Aarav Sharma',
+    creatorAvatarUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=240&auto=format&fit=crop&q=80',
+    projectId: 'proj-1',
+    projectTitle: 'Real-Time Telemetry Dashboard with React & Tailwind',
+    status: 'ACTIVE',
+    createdBy: 'business-1',
+    lastMessageAt: '2026-09-02T11:45:00.000Z',
+    lastMessageSnippet: 'Sounds great! Looking forward to reviewing the milestone breakdown.',
+    unreadCount: 0,
+    createdAt: '2026-09-01T10:00:00.000Z',
+    updatedAt: '2026-09-02T11:45:00.000Z',
+    participants: [
+      {
+        id: 'cp-1',
+        conversationId: 'conv-pre-1',
+        userId: 'business-1',
+        userName: 'Siddharth Menon',
+        userRole: 'BUSINESS',
+        joinedAt: '2026-09-01T10:00:00.000Z',
+        lastReadAt: '2026-09-02T11:50:00.000Z'
+      },
+      {
+        id: 'cp-2',
+        conversationId: 'conv-pre-1',
+        userId: 'student-1',
+        userName: 'Aarav Sharma',
+        userRole: 'STUDENT',
+        joinedAt: '2026-09-01T10:00:00.000Z',
+        lastReadAt: '2026-09-02T11:45:00.000Z'
+      }
+    ]
+  },
+  {
+    id: 'conv-proj-1',
+    conversationType: 'PROJECT',
+    businessId: 'business-1',
+    businessName: 'Siddharth Menon (HyperFlow Labs)',
+    businessAvatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=240&auto=format&fit=crop&q=80',
+    creatorId: 'student-1',
+    creatorName: 'Aarav Sharma',
+    creatorAvatarUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=240&auto=format&fit=crop&q=80',
+    projectId: 'proj-1',
+    projectTitle: 'Real-Time Telemetry Dashboard with React & Tailwind',
+    projectOfferId: 'offer-1',
+    status: 'ACTIVE',
+    createdBy: 'business-1',
+    lastMessageAt: '2026-09-03T15:30:00.000Z',
+    lastMessageSnippet: 'I have uploaded the initial wireframe specs. Please take a look.',
+    unreadCount: 1,
+    createdAt: '2026-09-03T09:00:00.000Z',
+    updatedAt: '2026-09-03T15:30:00.000Z',
+    participants: [
+      {
+        id: 'cp-3',
+        conversationId: 'conv-proj-1',
+        userId: 'business-1',
+        userName: 'Siddharth Menon',
+        userRole: 'BUSINESS',
+        joinedAt: '2026-09-03T09:00:00.000Z',
+        lastReadAt: '2026-09-03T15:30:00.000Z'
+      },
+      {
+        id: 'cp-4',
+        conversationId: 'conv-proj-1',
+        userId: 'student-1',
+        userName: 'Aarav Sharma',
+        userRole: 'STUDENT',
+        joinedAt: '2026-09-03T09:00:00.000Z',
+        lastReadAt: '2026-09-03T14:00:00.000Z' // unread message
+      }
+    ]
+  }
+];
+
+export const INITIAL_MESSAGES: Message[] = [
+  {
+    id: 'msg-1',
+    conversationId: 'conv-pre-1',
+    senderId: 'business-1',
+    senderName: 'Siddharth Menon',
+    senderRole: 'BUSINESS',
+    senderAvatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=240&auto=format&fit=crop&q=80',
+    messageType: 'TEXT',
+    body: 'Hi Aarav, loved your DTU telemetry portfolio project. Would you be open to building our live dashboard next week?',
+    createdAt: '2026-09-01T10:05:00.000Z',
+    updatedAt: '2026-09-01T10:05:00.000Z'
+  },
+  {
+    id: 'msg-2',
+    conversationId: 'conv-pre-1',
+    senderId: 'student-1',
+    senderName: 'Aarav Sharma',
+    senderRole: 'STUDENT',
+    senderAvatarUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=240&auto=format&fit=crop&q=80',
+    messageType: 'TEXT',
+    body: 'Hello Siddharth! Absolutely, I have experience with WebSockets and Chart.js. I can deliver the core milestone within 10 days.',
+    createdAt: '2026-09-01T11:20:00.000Z',
+    updatedAt: '2026-09-01T11:20:00.000Z'
+  },
+  {
+    id: 'msg-3',
+    conversationId: 'conv-pre-1',
+    senderId: 'business-1',
+    senderName: 'Siddharth Menon',
+    senderRole: 'BUSINESS',
+    messageType: 'TEXT',
+    body: 'Sounds great! Looking forward to reviewing the milestone breakdown.',
+    createdAt: '2026-09-02T11:45:00.000Z',
+    updatedAt: '2026-09-02T11:45:00.000Z'
+  },
+  {
+    id: 'msg-4',
+    conversationId: 'conv-proj-1',
+    senderId: 'business-1',
+    senderName: 'Siddharth Menon',
+    senderRole: 'BUSINESS',
+    messageType: 'TEXT',
+    body: 'Offer accepted! Welcome to the DevFlow Telemetry Dashboard project.',
+    createdAt: '2026-09-03T09:05:00.000Z',
+    updatedAt: '2026-09-03T09:05:00.000Z'
+  },
+  {
+    id: 'msg-5',
+    conversationId: 'conv-proj-1',
+    senderId: 'student-1',
+    senderName: 'Aarav Sharma',
+    senderRole: 'STUDENT',
+    messageType: 'VOICE',
+    body: 'Voice update on API integration and chart component architecture.',
+    attachments: [
+      {
+        id: 'att-voice-1',
+        messageId: 'msg-5',
+        conversationId: 'conv-proj-1',
+        storagePath: 'conv-proj-1/msg-5/voice_update_state.mp3',
+        fileName: 'Voice_Note_Architecture.mp3',
+        fileSizeBytes: 184320,
+        mimeType: 'audio/mp3',
+        voiceDurationSeconds: 24,
+        createdAt: '2026-09-03T11:30:00.000Z'
+      }
+    ],
+    createdAt: '2026-09-03T11:30:00.000Z',
+    updatedAt: '2026-09-03T11:30:00.000Z'
+  },
+  {
+    id: 'msg-6',
+    conversationId: 'conv-proj-1',
+    senderId: 'business-1',
+    senderName: 'Siddharth Menon',
+    senderRole: 'BUSINESS',
+    messageType: 'FILE',
+    body: 'I have uploaded the initial wireframe specs. Please take a look.',
+    attachments: [
+      {
+        id: 'att-file-1',
+        messageId: 'msg-6',
+        conversationId: 'conv-proj-1',
+        storagePath: 'conv-proj-1/msg-6/DevFlow_Telemetry_Specs_v1.pdf',
+        fileName: 'DevFlow_Telemetry_Specs_v1.pdf',
+        fileSizeBytes: 1048576,
+        mimeType: 'application/pdf',
+        createdAt: '2026-09-03T15:30:00.000Z'
+      }
+    ],
+    createdAt: '2026-09-03T15:30:00.000Z',
+    updatedAt: '2026-09-03T15:30:00.000Z'
   }
 ];

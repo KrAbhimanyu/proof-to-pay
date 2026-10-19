@@ -627,7 +627,7 @@ export const AuthModal: React.FC<Props> = ({
         )}
 
         {errorMsg && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-50 text-rose-700 text-xs flex items-center gap-2">
+          <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorMsg}</span>
           </div>
@@ -718,7 +718,7 @@ export const AuthModal: React.FC<Props> = ({
                   type="text"
                   value={studentName}
                   onChange={(e) => setStudentName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                   required
                 />
               </div>
@@ -742,7 +742,7 @@ export const AuthModal: React.FC<Props> = ({
                 type="email"
                 value={studentEmail}
                 onChange={(e) => setStudentEmail(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 required
               />
             </div>
@@ -753,7 +753,7 @@ export const AuthModal: React.FC<Props> = ({
                 type="password"
                 value={studentPassword}
                 onChange={(e) => setStudentPassword(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 required
               />
             </div>
@@ -766,7 +766,7 @@ export const AuthModal: React.FC<Props> = ({
                   value={studentCity}
                   onChange={(e) => setStudentCity(e.target.value)}
                   placeholder="e.g. Delhi, Pune"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                   required
                 />
               </div>
@@ -777,7 +777,7 @@ export const AuthModal: React.FC<Props> = ({
                   value={studentCollege}
                   onChange={(e) => setStudentCollege(e.target.value)}
                   placeholder="e.g. DTU, IIT, NID"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 />
               </div>
             </div>
@@ -789,7 +789,7 @@ export const AuthModal: React.FC<Props> = ({
                 value={studentHeadline}
                 onChange={(e) => setStudentHeadline(e.target.value)}
                 placeholder="e.g. React & TypeScript Developer"
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 required
               />
             </div>
@@ -828,7 +828,7 @@ export const AuthModal: React.FC<Props> = ({
                   type="text"
                   value={bizRepName}
                   onChange={(e) => setBizRepName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                   required
                 />
               </div>
@@ -838,7 +838,7 @@ export const AuthModal: React.FC<Props> = ({
                   type="text"
                   value={bizCompanyName}
                   onChange={(e) => setBizCompanyName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                   required
                 />
               </div>
@@ -850,7 +850,7 @@ export const AuthModal: React.FC<Props> = ({
                 type="email"
                 value={bizEmail}
                 onChange={(e) => setBizEmail(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 required
               />
             </div>
@@ -861,7 +861,7 @@ export const AuthModal: React.FC<Props> = ({
                 type="password"
                 value={bizPassword}
                 onChange={(e) => setBizPassword(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 required
               />
             </div>
@@ -874,7 +874,7 @@ export const AuthModal: React.FC<Props> = ({
                   value={bizCity}
                   onChange={(e) => setBizCity(e.target.value)}
                   placeholder="e.g. Bengaluru, Mumbai"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                   required
                 />
               </div>
@@ -885,7 +885,7 @@ export const AuthModal: React.FC<Props> = ({
                   value={bizIndustry}
                   onChange={(e) => setBizIndustry(e.target.value)}
                   placeholder="e.g. D2C, FinTech"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                   required
                 />
               </div>
@@ -926,7 +926,7 @@ export const AuthModal: React.FC<Props> = ({
                   value={recruiterName}
                   onChange={(e) => setRecruiterName(e.target.value)}
                   placeholder="e.g. Rhea Sengupta"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                   required
                 />
               </div>
@@ -937,7 +937,7 @@ export const AuthModal: React.FC<Props> = ({
                   value={recruiterCompany}
                   onChange={(e) => setRecruiterCompany(e.target.value)}
                   placeholder="e.g. TalentFoundry Partners"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                   required
                 />
               </div>
@@ -950,7 +950,7 @@ export const AuthModal: React.FC<Props> = ({
                 value={recruiterEmail}
                 onChange={(e) => setRecruiterEmail(e.target.value)}
                 placeholder="recruiter@agency.com"
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 required
               />
             </div>
@@ -962,7 +962,7 @@ export const AuthModal: React.FC<Props> = ({
                 value={recruiterPassword}
                 onChange={(e) => setRecruiterPassword(e.target.value)}
                 placeholder="At least 8 characters"
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 required
               />
             </div>
@@ -975,7 +975,7 @@ export const AuthModal: React.FC<Props> = ({
                   value={recruiterDesignation}
                   onChange={(e) => setRecruiterDesignation(e.target.value)}
                   placeholder="e.g. Lead Talent Partner"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 />
               </div>
               <div>
@@ -985,7 +985,7 @@ export const AuthModal: React.FC<Props> = ({
                   value={recruiterHiringDomains}
                   onChange={(e) => setRecruiterHiringDomains(e.target.value)}
                   placeholder="e.g. React, Android, UI/UX"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 />
               </div>
             </div>
