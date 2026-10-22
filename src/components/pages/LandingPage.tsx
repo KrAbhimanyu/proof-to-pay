@@ -13,6 +13,8 @@ import {
   Clock,
   Briefcase
 } from 'lucide-react';
+import heroStudentCreatorImage from '../../assets/images/hero_student_creator_1791569699063.jpg';
+import { MarketTrendsExplorer } from '../common/MarketTrendsExplorer';
 
 interface Props {
   projects: ProjectListing[];
@@ -35,12 +37,12 @@ export const LandingPage: React.FC<Props> = ({
     <div className="space-y-16 md:space-y-24 pb-16">
       {/* Hero Section */}
       <section className="relative overflow-hidden pt-8 md:pt-16 pb-12 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           
           {/* Left Text Column */}
           <div className="lg:col-span-7 space-y-6 text-left">
-            <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-emerald-700 dark:text-emerald-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="inline-flex flex-wrap items-center gap-2 text-[11px] sm:text-xs font-semibold tracking-wide text-emerald-700 dark:text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
               <span>₹0 LAUNCH BETA · THE WORK-EXPERIENCE PLATFORM FOR INDIA</span>
             </div>
 
@@ -105,7 +107,7 @@ export const LandingPage: React.FC<Props> = ({
             </div>
 
             {/* Value Highlights */}
-            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 grid grid-cols-3 gap-4 text-xs">
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 grid grid-cols-3 gap-2 sm:gap-4 text-xs">
               <div>
                 <div className="font-bold text-slate-900 dark:text-white text-base">₹1,000+</div>
                 <div className="text-slate-500 dark:text-slate-400">Minimum paid per project</div>
@@ -125,7 +127,7 @@ export const LandingPage: React.FC<Props> = ({
           <div className="lg:col-span-5 relative">
             <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800 bg-slate-100 aspect-[4/3] lg:aspect-auto lg:h-[460px]">
               <img
-                src="/src/assets/images/hero_student_creator_1791569699063.jpg"
+                src={heroStudentCreatorImage}
                 alt="Indian student creator collaborating on projects"
                 className="w-full h-full object-cover"
                 loading="eager"
@@ -278,6 +280,14 @@ export const LandingPage: React.FC<Props> = ({
             </div>
           ))}
         </div>
+      </section>
+
+      {/* Live Market Intelligence Section (Powered by Google Search Grounding) */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6">
+        <MarketTrendsExplorer
+          variant="full"
+          onNavigateToProjects={() => onNavigate('browse')}
+        />
       </section>
 
       {/* Beta Launch Invitation & ₹0 Community Commitment */}

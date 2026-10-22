@@ -101,7 +101,7 @@ export const RoleSwitcher: React.FC<Props> = ({
               {currentUser?.role === 'ADMIN' && <Shield className="w-3.5 h-3.5 text-purple-400" />}
               {!currentUser && <Users className="w-3.5 h-3.5 text-slate-400" />}
               
-              <span>{currentUser ? `${currentUser.name} (${currentUser.role})` : 'Public Visitor (Logged Out)'}</span>
+              <span className="truncate max-w-[120px] sm:max-w-none">{currentUser ? `${currentUser.name} (${currentUser.role})` : 'Visitor'}</span>
               <span className="text-[10px] text-slate-400 ml-1">▼</span>
             </button>
 
@@ -158,12 +158,12 @@ export const RoleSwitcher: React.FC<Props> = ({
             {isAndroidView ? (
               <>
                 <Smartphone className="w-3.5 h-3.5 text-emerald-200" />
-                <span className="font-semibold">📱 Android App Mode</span>
+                <span className="font-semibold">📱 Android</span>
               </>
             ) : (
               <>
                 <Monitor className="w-3.5 h-3.5 text-slate-400" />
-                <span>Switch to Android View</span>
+                <span className="hidden sm:inline">Switch to </span><span>Android</span>
               </>
             )}
           </button>

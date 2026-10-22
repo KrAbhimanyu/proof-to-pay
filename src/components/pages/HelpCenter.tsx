@@ -17,8 +17,21 @@ import {
   Clock,
   Sparkles,
   ExternalLink,
+  Rocket,
+  Globe,
+  RefreshCw,
+  X,
+  ArrowRight,
+  TrendingUp,
+  Info,
 } from 'lucide-react';
 import { User } from '../../types';
+import { MarketTrendsExplorer } from '../common/MarketTrendsExplorer';
+import {
+  marketIntelligenceService,
+  MarketTrendsResponse,
+  MarketTrendTopic,
+} from '../../lib/marketIntelligenceService';
 
 interface Props {
   onNavigate: (view: string, param?: string) => void;
@@ -40,6 +53,7 @@ export const HelpCenter: React.FC<Props> = ({
   onOpenAuth,
   currentUser,
 }) => {
+  const [activeView, setActiveView] = useState<'all' | 'trends' | 'faqs' | 'support'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [expandedId, setExpandedId] = useState<string | null>('faq-1');
@@ -47,6 +61,36 @@ export const HelpCenter: React.FC<Props> = ({
   const [ticketMessage, setTicketMessage] = useState('');
   const [ticketCategory, setTicketCategory] = useState('Payment & UTR');
   const [isTicketSubmitted, setIsTicketSubmitted] = useState(false);
+
+  // Search Grounding Tool State for real-time Help Center results
+  const [groundedQuery, setGroundedQuery] = useState('');
+  const [isGroundedSearching, setIsGroundedSearching] = useState(false);
+  const [groundedResult, setGroundedResult] = useState<MarketTrendsResponse | null>(null);
+  const [groundedError, setGroundedError] = useState<string | null>(null);
+
+  // Execute real-time search grounding for either help topics or project trends
+  const executeGroundedSearch = async (queryToRun: string) => {
+    const q = queryToRun.trim();
+    if (!q) return;
+    setIsGroundedSearching(true);
+    setGroundedError(null);
+    setGroundedQuery(q);
+
+    try {
+      const response = await marketIntelligenceService.fetchMarketTrends('custom', q);
+      setGroundedResult(response);
+    } catch (_err) {
+      setGroundedError('Unable to complete real-time grounded search. Serving verified market benchmarks.');
+    } finally {
+      setIsGroundedSearching(false);
+    }
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    executeGroundedSearch(searchQuery.trim());
+  };
 
   const faqs: FAQItem[] = [
     {
@@ -222,19 +266,270 @@ export const HelpCenter: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-            <Search className="w-5 h-5" />
-          </div>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search FAQs (e.g., 'UPI payment', 'revision cap', '18+ age', 'scope lock', 'UTR')..."
-            className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm transition"
-          />
+        {/* View / Section Switcher */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+          {[
+            { id: 'all' as const, label: 'All Knowledge & Intelligence', icon: HelpCircle },
+            { id: 'trends' as const, label: 'Market Trends & Opportunities', icon: Sparkles, badge: 'Live Grounded' },
+            { id: 'faqs' as const, label: 'Platform FAQs & Workflows', icon: FileCheck2 },
+            { id: 'support' as const, label: 'Dispute SLA & Arbitration', icon: ShieldCheck },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isSelected = activeView === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveView(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition ${
+                  isSelected
+                    ? tab.id === 'trends'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${tab.id === 'trends' && isSelected ? 'text-amber-300 animate-pulse' : ''}`} />
+                <span>{tab.label}</span>
+                {tab.badge && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-extrabold ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400'
+                  }`}>
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
+
+        {/* Real-Time Grounded Search Bar */}
+        <div className="space-y-3">
+          <form onSubmit={handleSearchSubmit} className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+              <Search className="w-5 h-5 text-indigo-500" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Query any help topic or project trend (e.g. 'UPI payment dispute', 'emerging AI opportunities 2026', 'fair Figma rates INR', 'scope lock')..."
+              className="w-full pl-12 pr-40 sm:pr-48 py-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-sm transition"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setGroundedResult(null);
+                  setGroundedQuery('');
+                }}
+                className="absolute right-36 sm:right-44 top-3.5 p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                title="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={isGroundedSearching || !searchQuery.trim()}
+              className="absolute right-2 top-2 px-3 sm:px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition active:scale-95 disabled:opacity-50 flex items-center gap-1.5 shadow-xs"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span className="hidden sm:inline">Search Grounding</span>
+              <span className="sm:hidden">Search</span>
+            </button>
+          </form>
+
+          {/* Quick Search Suggestions */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
+              Quick Suggestions:
+            </span>
+            {[
+              { label: '🚀 Emerging Opportunities', query: 'Emerging freelance project opportunities for student creators India 2026' },
+              { label: '💰 React MVP Rates (₹)', query: 'What do Indian startups pay for React MVPs in 2026?' },
+              { label: '🎬 D2C Video Editing Gigs', query: 'Top video editing project scopes and rates for D2C brands India' },
+              { label: '🔒 Scope Lock & Revisions', query: 'How does Scope Lock prevent unpaid revisions in Proof-to-Pay?' },
+              { label: '💳 UPI Settlement & UTR', query: 'How do creators verify UPI payments and log UTR numbers?' },
+            ].map((chip, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => {
+                  setSearchQuery(chip.query);
+                  executeGroundedSearch(chip.query);
+                }}
+                className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/60 dark:hover:text-indigo-300 transition"
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Real-Time Grounding Loading State */}
+        {isGroundedSearching && (
+          <div className="p-6 rounded-3xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/40 dark:bg-indigo-950/20 text-center space-y-3">
+            <div className="w-9 h-9 mx-auto rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+            <div className="space-y-1">
+              <div className="font-bold text-sm text-slate-900 dark:text-white flex items-center justify-center gap-2">
+                <Globe className="w-4 h-4 text-indigo-500 animate-pulse" />
+                <span>Grounding live search with Gemini 3.8 Flash...</span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Fetching up-to-date industry news, market benchmarks, and help guidance for "{groundedQuery}"
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Real-Time Grounded Result Display */}
+        {groundedResult && !isGroundedSearching && (
+          <div className="p-6 rounded-3xl border border-indigo-200 dark:border-indigo-800/80 bg-white dark:bg-slate-900 shadow-sm space-y-5 animate-in fade-in duration-300">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Google Search Grounding Result</span>
+                </div>
+                <div className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white">
+                  Real-Time Intelligence: "{groundedQuery}"
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {groundedResult.isLive ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                    <span>Live Web Grounded</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Verified Benchmark Data</span>
+                  </span>
+                )}
+
+                <button
+                  onClick={() => {
+                    setGroundedResult(null);
+                    setGroundedQuery('');
+                  }}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+                  title="Dismiss result"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Notice if serving benchmark during refresh */}
+            {groundedResult.notice && (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2">
+                <Info className="w-4 h-4 shrink-0 text-amber-600" />
+                <span>{groundedResult.notice}</span>
+              </div>
+            )}
+
+            {/* Synthesized Grounded Text */}
+            <div className="p-5 rounded-2xl bg-slate-50/70 dark:bg-slate-950/50 border border-slate-200/80 dark:border-slate-800/80">
+              <div className="prose prose-sm dark:prose-invert max-w-none space-y-3 text-slate-700 dark:text-slate-300 text-xs sm:text-sm leading-relaxed whitespace-pre-line">
+                {groundedResult.text}
+              </div>
+            </div>
+
+            {/* Grounding Sources & Citations */}
+            {groundedResult.sources && groundedResult.sources.length > 0 && (
+              <div className="space-y-2.5 pt-1">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <Globe className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Grounding Sources & Real-World Citations ({groundedResult.sources.length})</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                  {groundedResult.sources.map((source, idx) => (
+                    <a
+                      key={idx}
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500 bg-white dark:bg-slate-900 text-left transition group shadow-2xs flex flex-col justify-between"
+                    >
+                      <div className="font-semibold text-xs text-slate-900 dark:text-white line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
+                        {source.title}
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 pt-2 mt-auto">
+                        <span className="truncate max-w-[180px]">
+                          {new URL(source.url.startsWith('http') ? source.url : `https://${source.url}`).hostname}
+                        </span>
+                        <ExternalLink className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition shrink-0 ml-1 text-slate-400" />
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Web Search Queries Used */}
+            {groundedResult.searchQueries && groundedResult.searchQueries.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[11px] text-slate-400">
+                <span className="font-medium">Google Search queries used:</span>
+                {groundedResult.searchQueries.map((sq, i) => (
+                  <span key={i} className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono text-[10px]">
+                    "{sq}"
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Quick action to explore further */}
+            <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs text-slate-500">
+                Found these insights helpful? Explore active projects in the marketplace.
+              </span>
+              <button
+                onClick={() => onNavigate('browse')}
+                className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition flex items-center gap-1.5"
+              >
+                <span>Browse Matching Projects</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Dedicated Market Trends & Emerging Opportunities Section */}
+        {(activeView === 'all' || activeView === 'trends') && (
+          <div id="market-trends-section" className="space-y-4 pt-2">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">
+                    Market Trends & Emerging Project Opportunities
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Live industry news and high-growth opportunities for creators grounded in Google Search
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <MarketTrendsExplorer
+              variant="full"
+              initialTopic="opportunities"
+              title="Creator Opportunity & Industry Trends Radar"
+              description="Real-time industry insights using the Google Search Grounding tool to uncover high-demand project niches, fair INR rates, and startup hiring trends across India."
+              onNavigateToProjects={() => onNavigate('browse')}
+            />
+          </div>
+        )}
+
+        {/* FAQs & Knowledge Base Section */}
+        {(activeView === 'all' || activeView === 'faqs') && (
+          <div className="space-y-6 pt-4">
 
         {/* Category Filters */}
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
@@ -431,8 +726,11 @@ export const HelpCenter: React.FC<Props> = ({
             </div>
           )}
         </div>
+        </div>
+        )}
 
         {/* Dispute Resolution SLA & Contact Support Card */}
+        {(activeView === 'all' || activeView === 'support') && (
         <div className="p-6 sm:p-8 rounded-3xl bg-linear-to-br from-slate-900 to-slate-800 text-white border border-slate-800 shadow-xl space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
@@ -524,6 +822,7 @@ export const HelpCenter: React.FC<Props> = ({
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

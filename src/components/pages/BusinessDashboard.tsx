@@ -17,6 +17,7 @@ import { Badges } from '../common/Badges';
 import { ScopeLockModal } from '../common/ScopeLockModal';
 import { ScopeChangeModal } from '../common/ScopeChangeModal';
 import { WorkTrail } from '../common/WorkTrail';
+import { ProjectPerformanceWidget } from '../common/ProjectPerformanceWidget';
 import confetti from 'canvas-confetti';
 import {
   Building2,
@@ -41,7 +42,8 @@ import {
   Sparkles,
   Lock,
   LogOut,
-  MessageSquare
+  MessageSquare,
+  BarChart3
 } from 'lucide-react';
 
 interface Props {
@@ -66,7 +68,7 @@ export const BusinessDashboard: React.FC<Props> = ({
   onTabChange,
   onOpenChat,
 }) => {
-  const [internalTab, setInternalTab] = useState<'overview' | 'projects' | 'create_project' | 'applications' | 'active_work' | 'payments' | 'verification'>('overview');
+  const [internalTab, setInternalTab] = useState<'overview' | 'projects' | 'create_project' | 'applications' | 'active_work' | 'payments' | 'verification' | 'performance'>('overview');
   
   const activeTab = (controlledTab as any) || internalTab;
   const setActiveTab = (tab: any) => {
@@ -96,6 +98,7 @@ export const BusinessDashboard: React.FC<Props> = ({
   });
   const payments = marketplaceStore.getPayments().filter((p) => p.businessId === currentUser.id);
   const commissions = marketplaceStore.getPlatformCommissions().filter((c) => c.businessId === currentUser.id);
+  const allReviews = marketplaceStore.getReviews();
   const monetizationConfig = marketplaceStore.getMonetizationConfig();
 
   // --- Commission Fee Payment State ---
@@ -497,6 +500,16 @@ export const BusinessDashboard: React.FC<Props> = ({
         </button>
 
         <button
+          onClick={() => setActiveTab('performance')}
+          className={`pb-3 px-2 border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === 'performance' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <BarChart3 className="w-3.5 h-3.5" />
+          <span>Project Performance (D3)</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('payments')}
           className={`pb-3 px-2 border-b-2 transition whitespace-nowrap ${
             activeTab === 'payments' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900'
@@ -553,6 +566,28 @@ export const BusinessDashboard: React.FC<Props> = ({
               </div>
             </div>
           </div>
+
+          {/* D3 Project Performance Widget */}
+          <ProjectPerformanceWidget
+            projects={businessProjects}
+            reviews={allReviews}
+            submissions={submissions}
+            businessId={currentUser.id}
+            onNavigateToProjects={() => setActiveTab('create_project')}
+          />
+        </div>
+      )}
+
+      {/* Tab: Dedicated Project Performance Analytics View */}
+      {activeTab === 'performance' && (
+        <div className="space-y-6">
+          <ProjectPerformanceWidget
+            projects={businessProjects}
+            reviews={allReviews}
+            submissions={submissions}
+            businessId={currentUser.id}
+            onNavigateToProjects={() => setActiveTab('create_project')}
+          />
         </div>
       )}
 

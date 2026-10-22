@@ -7,8 +7,6 @@ import {
   Wallet,
   User as UserIcon,
   ChevronLeft,
-  Wifi,
-  Battery,
   Shield,
   Smartphone,
   Sparkles,
@@ -48,20 +46,6 @@ export const AndroidShell: React.FC<Props> = ({
       {/* Android Device Mockup Frame on desktop viewports */}
       <div className="w-full md:max-w-[430px] md:h-[880px] md:max-h-[92vh] bg-slate-50 dark:bg-slate-900 md:rounded-[44px] shadow-2xl md:ring-1 md:ring-slate-700 md:border-4 md:border-slate-800 flex flex-col relative overflow-hidden">
         
-        {/* Android Hardware Camera Punch-Hole & Status Bar */}
-        <div className="bg-slate-900 text-slate-200 text-[11px] font-semibold px-6 pt-2 pb-1.5 flex items-center justify-between select-none shrink-0 z-50">
-          <span>11:15</span>
-          {/* Centered camera punch-hole */}
-          <div className="w-4 h-4 rounded-full bg-black border border-slate-700/60 shadow-inner hidden md:block" />
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-emerald-400">5G</span>
-            <Wifi className="w-3 h-3" />
-            <div className="flex items-center gap-0.5">
-              <span className="text-[10px]">92%</span>
-              <Battery className="w-3.5 h-3.5 text-emerald-400" />
-            </div>
-          </div>
-        </div>
 
         {/* Android Native App Header Bar */}
         <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 flex items-center justify-between shrink-0 z-40">

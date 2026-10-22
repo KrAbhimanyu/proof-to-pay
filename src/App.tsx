@@ -4,17 +4,14 @@ import { marketplaceStore } from './lib/storage';
 import { supabaseService } from './lib/supabaseService';
 import { auth } from './lib/firebase';
 import { signOut as firebaseSignOut } from 'firebase/auth';
-import { RoleSwitcher } from './components/common/RoleSwitcher';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { AndroidShell } from './components/layout/AndroidShell';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { AndroidAppGuideModal } from './components/pages/AndroidAppGuideModal';
 import { AuthModal } from './components/pages/AuthModal';
-import { BetaBanner } from './components/common/BetaBanner';
 import { BetaFeedbackModal } from './components/common/BetaFeedbackModal';
 import { ReportAbuseModal } from './components/common/ReportAbuseModal';
-import { BackendStatusBanner } from './components/common/BackendStatusBanner';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 import { LandingPage } from './components/pages/LandingPage';
@@ -519,7 +516,9 @@ export default function App() {
             onOpenFeedback={() => setIsFeedbackOpen(true)}
           />
         );
+      case 'help':
       case 'help_center':
+      case 'market_trends':
         return (
           <HelpCenter
             onNavigate={handleNavigate}
@@ -588,35 +587,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
-      {/* Top Role Sandbox Bar (Development & Sandbox Demo Only - Never rendered in Production) */}
-      {!import.meta.env.PROD && (
-        <RoleSwitcher
-          currentUser={currentUser}
-          onUserChange={handleUserChange}
-          isAndroidView={isAndroidView}
-          onToggleAndroidView={() => setIsAndroidView(!isAndroidView)}
-          onOpenAndroidGuide={() => {
-            setAndroidGuideTab('compose');
-            setIsAndroidGuideOpen(true);
-          }}
-        />
-      )}
-
-      {/* Database Connection & Demo Mode Banner */}
-      <BackendStatusBanner
-        onOpenSetupGuide={() => {
-          setAndroidGuideTab('supabase');
-          setIsAndroidGuideOpen(true);
-        }}
-      />
-
-      {/* Beta Launch Community Banner */}
-      <BetaBanner
-        onOpenFeedback={() => setIsFeedbackOpen(true)}
-        onNavigate={handleNavigate}
-      />
-
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors overflow-x-hidden">
       {/* Offline Mode Indicator */}
       <OfflineIndicator />
 

@@ -82,9 +82,9 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         >
           <div className="flex items-center gap-2">
             {currentOpt.icon}
-            <span>{currentOpt.label}</span>
+            <span className="hidden sm:inline">{currentOpt.label}</span>
             {theme === 'system' && (
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">
+              <span className="hidden md:inline text-[10px] text-slate-400 dark:text-slate-500 font-normal">
                 ({effectiveTheme})
               </span>
             )}
