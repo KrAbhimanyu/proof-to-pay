@@ -34,7 +34,13 @@ import { storage } from './lib/storage';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    // In production builds with unconfigured backend, never auto-assume demo accounts
+    // Check if user previously logged in via session
+    const savedId = typeof localStorage !== 'undefined' ? localStorage.getItem('ptp_current_user_id') : null;
+    if (savedId) {
+      const u = marketplaceStore.getCurrentUser();
+      if (u) return u;
+    }
+    // In production builds with unconfigured backend, never auto-assume demo accounts without active session
     if (import.meta.env.PROD && !supabaseService.isLiveBackendConfigured()) {
       return null;
     }
@@ -45,6 +51,7 @@ export default function App() {
 
   const [activeView, setActiveView] = useState<string>('landing');
   const [viewParam, setViewParam] = useState<string | undefined>(undefined);
+  const [pendingRedirect, setPendingRedirect] = useState<{ view: string; param?: string } | null>(null);
   const [isAndroidView, setIsAndroidView] = useState<boolean>(false);
   const [isAndroidGuideOpen, setIsAndroidGuideOpen] = useState<boolean>(false);
   const [androidGuideTab, setAndroidGuideTab] = useState<'compose' | 'supabase' | 'install' | 'code'>('compose');
@@ -157,7 +164,13 @@ export default function App() {
         }
       } else {
         // Offline / Sandbox Demo Mode
-        if (import.meta.env.PROD) {
+        const savedId = typeof localStorage !== 'undefined' ? localStorage.getItem('ptp_current_user_id') : null;
+        if (savedId) {
+          const u = marketplaceStore.getCurrentUser();
+          if (isMounted && u) {
+            setCurrentUser(u);
+          }
+        } else if (import.meta.env.PROD) {
           if (isMounted) {
             setCurrentUser(null);
             marketplaceStore.setCurrentUserId(null);
@@ -275,6 +288,13 @@ export default function App() {
     setCurrentUser(user);
     if (!user) {
       setActiveView('landing');
+      setPendingRedirect(null);
+    } else if (pendingRedirect) {
+      const targetView = pendingRedirect.view;
+      const targetParam = pendingRedirect.param;
+      setPendingRedirect(null);
+      setActiveView(targetView);
+      setViewParam(targetParam);
     } else if (user.role === 'STUDENT') {
       setActiveView('student_dashboard');
     } else if (user.role === 'BUSINESS') {
@@ -313,10 +333,31 @@ export default function App() {
         return (
           <BrowseProjects
             projects={projects}
-            onSelectProject={(id) => handleNavigate('project_detail', id)}
+            onSelectProject={(id) => {
+              if (!currentUser) {
+                setPendingRedirect({ view: 'project_detail', param: id });
+                setAuthMode('login');
+                setIsAuthOpen(true);
+              } else {
+                handleNavigate('project_detail', id);
+              }
+            }}
           />
         );
-      case 'project_detail':
+      case 'project_detail': {
+        if (!currentUser) {
+          return (
+            <AccessDenied
+              currentUser={null}
+              targetRole="STUDENT"
+              onNavigate={handleNavigate}
+              onOpenAuth={(mode) => {
+                setPendingRedirect({ view: 'project_detail', param: viewParam || selectedProject?.id });
+                handleOpenAuth(mode || 'login');
+              }}
+            />
+          );
+        }
         return selectedProject ? (
           <ProjectDetail
             project={selectedProject}
@@ -329,6 +370,7 @@ export default function App() {
         ) : (
           <div className="p-12 text-center">Project not found</div>
         );
+      }
       case 'student_dashboard':
       case 'creator_dashboard': {
         if (!currentUser) {

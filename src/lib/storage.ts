@@ -204,6 +204,17 @@ class MarketplaceStore {
     return this.get<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
   }
 
+  public saveUser(user: User): void {
+    const users = this.getUsers();
+    const idx = users.findIndex((u) => u.id === user.id);
+    if (idx >= 0) {
+      users[idx] = user;
+    } else {
+      users.push(user);
+    }
+    this.set(STORAGE_KEYS.USERS, users);
+  }
+
   public getCurrentUser(): User | null {
     const users = this.getUsers();
     const currentId = this.get<string | null>(STORAGE_KEYS.CURRENT_USER_ID, null);
@@ -306,6 +317,10 @@ class MarketplaceStore {
     if (data.linkedinUrl !== undefined) sanitized.linkedinUrl = data.linkedinUrl ? data.linkedinUrl.trim() : null;
     if (data.behanceUrl !== undefined) sanitized.behanceUrl = data.behanceUrl ? data.behanceUrl.trim() : null;
 
+    if (data.age !== undefined) sanitized.age = data.age;
+    if (data.upiId !== undefined) sanitized.upiId = data.upiId ? data.upiId.trim() : undefined;
+    if (data.connections !== undefined) sanitized.connections = data.connections;
+
     const result = this.updateStudentProfile(profileUserId, sanitized);
 
     // Synchronize user record in users table/list as well
@@ -323,6 +338,83 @@ class MarketplaceStore {
 
     this.logAudit(user, 'UPDATED_PORTFOLIO_PRESENTATION', 'USER', profileUserId, 'Updated public creator profile fields and presentation.');
     return result;
+  }
+
+  public submitStudentVerification(
+    studentId: string,
+    details: {
+      documentType: string;
+      documentNumber: string;
+      studentIdCardUrl?: string;
+      collegeEmail?: string;
+    },
+    caller?: User
+  ): StudentProfile {
+    const user = caller || this.getCurrentUser();
+    if (!user || (user.id !== studentId && user.role !== 'ADMIN')) {
+      throw new Error('Unauthorized');
+    }
+    const profile = this.getStudentProfile(studentId);
+    if (!profile) throw new Error('Student profile not found');
+
+    const updated: StudentProfile = {
+      ...profile,
+      verificationStatus: 'PENDING',
+      verificationDetails: {
+        documentType: details.documentType,
+        documentNumber: details.documentNumber,
+        studentIdCardUrl: details.studentIdCardUrl,
+        collegeEmail: details.collegeEmail,
+        submittedAt: new Date().toISOString(),
+      },
+    };
+    this.updateStudentProfile(studentId, updated);
+    this.logAudit(
+      user,
+      'SUBMITTED_STUDENT_VERIFICATION',
+      'VERIFICATION',
+      studentId,
+      `Submitted student verification evidence (${details.documentType}: ${details.documentNumber}).`
+    );
+    return updated;
+  }
+
+  public adminVerifyStudent(
+    adminUser: User,
+    studentId: string,
+    approved: boolean,
+    notes: string
+  ): StudentProfile {
+    if (adminUser.role !== 'ADMIN') throw new Error('Admin authorization required');
+    const profile = this.getStudentProfile(studentId);
+    if (!profile) throw new Error('Student not found');
+
+    const updated: StudentProfile = {
+      ...profile,
+      verificationStatus: approved ? 'VERIFIED' : 'REJECTED',
+      verificationDetails: profile.verificationDetails
+        ? {
+            ...profile.verificationDetails,
+            verifiedAt: new Date().toISOString(),
+            adminNotes: notes,
+          }
+        : {
+            documentType: 'ADMIN_MANUAL_REVIEW',
+            documentNumber: 'ADMIN-OVERRIDE',
+            submittedAt: new Date().toISOString(),
+            verifiedAt: new Date().toISOString(),
+            adminNotes: notes,
+          },
+    };
+    this.updateStudentProfile(studentId, updated);
+    this.logAudit(
+      adminUser,
+      approved ? 'APPROVED_STUDENT_VERIFICATION' : 'REJECTED_STUDENT_VERIFICATION',
+      'VERIFICATION',
+      studentId,
+      notes
+    );
+    return updated;
   }
 
   // --- Business Profiles ---
@@ -432,6 +524,16 @@ class MarketplaceStore {
 
     this.set(STORAGE_KEYS.PROJECTS, projects);
     this.logAudit(adminUser, approved ? 'APPROVED_PROJECT_LISTING' : 'REJECTED_PROJECT_LISTING', 'PROJECT', projectId, notes || 'Moderation decision recorded');
+
+    // Queue status update for background sync to Supabase backend
+    if (typeof window !== 'undefined') {
+      import('./syncManager').then(({ syncManager }) => {
+        syncManager.queueMutation('PROJECT_STATUS_UPDATE', {
+          projectId,
+          status: proj.status,
+        }).catch(() => {});
+      });
+    }
   }
 
   // --- Applications ---
@@ -442,8 +544,8 @@ class MarketplaceStore {
   public applyToProject(studentUser: User, projectId: string, pitchMessage: string, proposedDeliveryDays: number, portfolioSamples: { title: string; url: string }[]): Application {
     if (studentUser.role !== 'STUDENT') throw new Error('Only students can apply to projects');
     const studentProfile = this.getStudentProfile(studentUser.id);
-    if (!studentProfile || studentProfile.age < 18) {
-      throw new Error('You must be 18+ and have a completed student profile to apply.');
+    if (!studentProfile) {
+      throw new Error('You must have a completed student profile to apply.');
     }
 
     const project = this.getProject(projectId);
@@ -474,6 +576,25 @@ class MarketplaceStore {
 
     this.set(STORAGE_KEYS.APPLICATIONS, [newApp, ...apps]);
     this.logAudit(studentUser, 'SUBMITTED_APPLICATION', 'PROJECT', projectId, `Applied to ${project.title}`);
+
+    // Queue application for background sync to Supabase backend
+    if (typeof window !== 'undefined') {
+      import('./syncManager').then(({ syncManager }) => {
+        syncManager.queueMutation('APPLICATION_SUBMIT', {
+          projectId,
+          projectTitle: project.title,
+          studentId: studentUser.id,
+          studentName: studentUser.name,
+          studentSkills: studentProfile.skills,
+          pitchMessage,
+          portfolioSamples,
+          proposedDeliveryDays,
+          status: 'PENDING',
+          createdAt: newApp.createdAt,
+        }).catch(() => {});
+      });
+    }
+
     return newApp;
   }
 
@@ -731,7 +852,8 @@ class MarketplaceStore {
     const proj = this.getProject(projectId);
     if (!proj || proj.businessId !== businessUser.id) throw new Error('Unauthorized');
 
-    const subs = this.getSubmissions().filter((s) => s.projectId === projectId);
+    const allSubs = this.getSubmissions();
+    const subs = allSubs.filter((s) => s.projectId === projectId);
     if (subs.length >= proj.permittedRevisions + 1) {
       throw new Error(`Permitted revision limit (${proj.permittedRevisions}) exceeded. Please approve or contact admin.`);
     }
@@ -741,7 +863,7 @@ class MarketplaceStore {
       latestSub.status = 'REVISION_REQUESTED';
       latestSub.revisionFeedback = feedback;
       latestSub.revisionRequestedAt = new Date().toISOString();
-      this.set(STORAGE_KEYS.SUBMISSIONS, this.getSubmissions());
+      this.set(STORAGE_KEYS.SUBMISSIONS, allSubs);
     }
 
     const projects = this.getProjects();
@@ -874,6 +996,16 @@ class MarketplaceStore {
     const payments = this.getPayments();
     const pay = payments.find((p) => p.projectId === projectId && p.studentId === studentUser.id);
     if (!pay) throw new Error('Payment record not found for this creator');
+
+    if (pay.status === 'RECEIPT_CONFIRMED_BY_CREATOR' || pay.confirmedAt) {
+      throw new Error('Payment receipt has already been confirmed');
+    }
+    if (pay.status === 'DISPUTED') {
+      throw new Error('Cannot confirm payment receipt while payment is disputed');
+    }
+    if (pay.status !== 'REPORTED_BY_BUSINESS' && pay.status !== 'PAID') {
+      throw new Error(`Payment cannot be confirmed in current status: ${pay.status}`);
+    }
 
     pay.status = 'RECEIPT_CONFIRMED_BY_CREATOR';
     pay.confirmedAt = new Date().toISOString();

@@ -754,7 +754,7 @@ fun BusinessDeliverableReviewScreen(
                                             )
                                         )
                                         showApproveDialog = false
-                                        successMessage = "Project completed! UTR recorded and verified review published."
+                                        successMessage = "Deliverable approved! Payment UTR reported. Awaiting creator receipt confirmation."
                                     },
                                     onError = { err ->
                                         errorMessage = err

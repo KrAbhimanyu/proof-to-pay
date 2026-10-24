@@ -10,6 +10,7 @@ import { PaymentHistory } from '../common/PaymentHistory';
 import { VerifiedSkills } from '../common/VerifiedSkills';
 import { EarningsPerformanceChart } from '../common/EarningsPerformanceChart';
 import { ThemeToggle } from '../common/ThemeToggle';
+import { WorkflowJourneyTracker } from '../common/WorkflowJourneyTracker';
 import confetti from 'canvas-confetti';
 import {
   GraduationCap,
@@ -45,7 +46,13 @@ import {
   LifeBuoy,
   ArrowRight,
   LogOut,
-  MessageSquare
+  MessageSquare,
+  Palette,
+  UserPlus,
+  Link2,
+  Globe,
+  UserCheck,
+  Share2
 } from 'lucide-react';
 
 interface Props {
@@ -78,6 +85,7 @@ export const StudentDashboard: React.FC<Props> = ({
     if (onTabChange) onTabChange(tab);
   };
 
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const userId = currentUser?.id || 'student-1';
   const userName = currentUser?.name || 'Creator';
   const rawProfile = marketplaceStore.getStudentProfile(userId);
@@ -86,7 +94,7 @@ export const StudentDashboard: React.FC<Props> = ({
     userId,
     headline: rawProfile?.headline || 'Emerging Creator',
     bio: rawProfile?.bio || '',
-    age: rawProfile?.age ?? 20,
+    age: rawProfile?.age,
     skills: Array.isArray(rawProfile?.skills) ? rawProfile.skills : ['UI/UX', 'React'],
     experienceLevel: rawProfile?.experienceLevel || 'INTERMEDIATE',
     portfolioLinks: rawProfile?.portfolioLinks || [],
@@ -99,6 +107,14 @@ export const StudentDashboard: React.FC<Props> = ({
     upiId: rawProfile?.upiId || '',
     pinnedBadgeIds: rawProfile?.pinnedBadgeIds || ['early-adopter', 'top-rated', 'project-completed'],
     availability: rawProfile?.availability || 'AVAILABLE',
+    coverImageUrl: rawProfile?.coverImageUrl || 'emerald',
+    connections: rawProfile?.connections || [],
+    githubUrl: rawProfile?.githubUrl || currentUser?.githubUrl || null,
+    linkedinUrl: rawProfile?.linkedinUrl || currentUser?.linkedinUrl || null,
+    behanceUrl: rawProfile?.behanceUrl || currentUser?.behanceUrl || null,
+    socialLinks: rawProfile?.socialLinks || [],
+    verificationStatus: rawProfile?.verificationStatus || 'UNVERIFIED',
+    verificationDetails: rawProfile?.verificationDetails,
   };
 
   const applications = (marketplaceStore.getApplications() || []).filter((a) => a.studentId === userId);
@@ -144,20 +160,119 @@ export const StudentDashboard: React.FC<Props> = ({
     setTimeout(() => setToastMsg(null), 4000);
   };
 
-  // Profile Form State
-  const [editBio, setEditBio] = useState(profile.bio || '');
-  const [editHeadline, setEditHeadline] = useState(profile.headline || '');
-  const [editSkills, setEditSkills] = useState((profile.skills || []).join(', '));
+  // Profile Form & Presentation Modal States
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [editName, setEditName] = useState(currentUser?.name || '');
+  const [editHeadline, setEditHeadline] = useState(profile.headline);
+  const [editBio, setEditBio] = useState(profile.bio);
+  const [editCollege, setEditCollege] = useState(profile.college || '');
+  const [editDegree, setEditDegree] = useState(profile.degree || '');
+  const [editCity, setEditCity] = useState(currentUser?.city || '');
+  const [editAvailability, setEditAvailability] = useState<'AVAILABLE' | 'BUSY' | 'UNAVAILABLE'>(profile.availability || 'AVAILABLE');
   const [editUpi, setEditUpi] = useState(profile.upiId || '');
+  const [editGithub, setEditGithub] = useState(profile.githubUrl || '');
+  const [editLinkedin, setEditLinkedin] = useState(profile.linkedinUrl || '');
+  const [editBehance, setEditBehance] = useState(profile.behanceUrl || '');
+  const [editSkillsList, setEditSkillsList] = useState<string[]>(profile.skills);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+
+  // Customize Banner Modal State
+  const [isCustomizeBannerOpen, setIsCustomizeBannerOpen] = useState(false);
+  const [selectedBannerPreset, setSelectedBannerPreset] = useState(profile.coverImageUrl || 'emerald');
+  const [customBannerUrl, setCustomBannerUrl] = useState(profile.coverImageUrl?.startsWith('http') ? profile.coverImageUrl : '');
+  const [isSavingBanner, setIsSavingBanner] = useState(false);
+
+  // +Connection Profile Modal State
+  const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
+  const [connPlatform, setConnPlatform] = useState<string>('LinkedIn');
+  const [connName, setConnName] = useState<string>('');
+  const [connUrl, setConnUrl] = useState<string>('');
+  const [connRole, setConnRole] = useState<string>('Senior Recruiter');
+  const [connNotes, setConnNotes] = useState<string>('');
+  const [isAddingConnection, setIsAddingConnection] = useState(false);
+
+  // Quick Skill & Link States (Profile Tab)
+  const [quickSkillInput, setQuickSkillInput] = useState('');
+  const [newLinkPlatform, setNewLinkPlatform] = useState('GitHub');
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+
+  // Verification Modal State
+  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+  const [verificationDocType, setVerificationDocType] = useState('College Student Identity Card');
+  const [verificationDocNumber, setVerificationDocNumber] = useState('');
+  const [verificationCollegeEmail, setVerificationCollegeEmail] = useState('');
+  const [verificationIdCardUrl, setVerificationIdCardUrl] = useState('');
+  const [isSubmittingVerification, setIsSubmittingVerification] = useState(false);
+
+  // Review Modal State
+  const [reviewingProjectId, setReviewingProjectId] = useState<string | null>(null);
+  const [reviewRating, setReviewRating] = useState<number>(5);
+  const [reviewComment, setReviewComment] = useState<string>('');
+  const [reviewDeliverableSummary, setReviewDeliverableSummary] = useState<string>('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   // Support Request Modal State
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
-  const [supportCategory, setSupportCategory] = useState('PAYMENT_UTR');
-  const [supportRelatedProjectId, setSupportRelatedProjectId] = useState('');
+  const [supportCategory, setSupportCategory] = useState<string>('MILESTONE_ISSUE');
   const [supportSubject, setSupportSubject] = useState('');
   const [supportMessage, setSupportMessage] = useState('');
+  const [supportRelatedProjectId, setSupportRelatedProjectId] = useState('');
   const [isSubmittingSupport, setIsSubmittingSupport] = useState(false);
+
+  const handleSubmitVerification = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verificationDocNumber.trim()) {
+      showToast('Please enter your student identity or enrollment roll number.', 'error');
+      return;
+    }
+    setIsSubmittingVerification(true);
+    try {
+      marketplaceStore.submitStudentVerification(userId, {
+        documentType: verificationDocType,
+        documentNumber: verificationDocNumber.trim(),
+        collegeEmail: verificationCollegeEmail.trim() || undefined,
+        studentIdCardUrl: verificationIdCardUrl.trim() || undefined,
+      });
+      setProfileRefreshKey((k) => k + 1);
+      setIsVerificationModalOpen(false);
+      showToast('Verification submitted! Proof-to-Pay editorial audit team will review your credentials within 24 hours.', 'success');
+      confetti({ particleCount: 40, spread: 50 });
+    } catch (err: any) {
+      showToast(err.message || 'Failed to submit verification.', 'error');
+    } finally {
+      setIsSubmittingVerification(false);
+    }
+  };
+
+  const handleSubmitCreatorReview = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewingProjectId) return;
+    if (!reviewComment.trim() || reviewComment.trim().length < 10) {
+      showToast('Please write a detailed review (at least 10 characters).', 'error');
+      return;
+    }
+    setIsSubmittingReview(true);
+    try {
+      marketplaceStore.addReview(
+        currentUser,
+        reviewingProjectId,
+        reviewRating,
+        reviewComment.trim(),
+        reviewDeliverableSummary.trim() || 'Verified milestone deliverables completed on agreed terms'
+      );
+      setProfileRefreshKey((k) => k + 1);
+      setReviewingProjectId(null);
+      setReviewComment('');
+      setReviewDeliverableSummary('');
+      showToast('Verified review submitted and published to project audit record!', 'success');
+      confetti({ particleCount: 50, spread: 60 });
+    } catch (err: any) {
+      showToast(err.message || 'Failed to submit review.', 'error');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
   const handleSendSupportRequest = (e: React.FormEvent) => {
     e.preventDefault();
@@ -333,18 +448,256 @@ export const StudentDashboard: React.FC<Props> = ({
     }
   };
 
-  // Handle Profile Update
-  const handleSaveProfile = (e: React.FormEvent) => {
+  // Banner presets
+  const BANNER_PRESETS = [
+    { id: 'emerald', label: 'Emerald Forest', gradient: 'from-emerald-600 via-teal-700 to-indigo-800' },
+    { id: 'indigo', label: 'Deep Indigo', gradient: 'from-indigo-600 via-purple-700 to-slate-900' },
+    { id: 'cyber', label: 'Cyber Slate', gradient: 'from-slate-900 via-slate-800 to-emerald-950' },
+    { id: 'sunset', label: 'Sunset Horizon', gradient: 'from-amber-600 via-rose-600 to-purple-800' },
+    { id: 'ocean', label: 'Ocean Teal', gradient: 'from-cyan-600 via-teal-600 to-blue-800' },
+    { id: 'carbon', label: 'Carbon Minimal', gradient: 'from-zinc-800 via-neutral-900 to-black' },
+  ];
+
+  const getBannerBackground = (coverUrl?: string) => {
+    if (!coverUrl || coverUrl === 'emerald') return 'bg-gradient-to-r from-emerald-600 via-teal-700 to-indigo-800';
+    if (coverUrl === 'indigo') return 'bg-gradient-to-r from-indigo-600 via-purple-700 to-slate-900';
+    if (coverUrl === 'cyber') return 'bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950';
+    if (coverUrl === 'sunset') return 'bg-gradient-to-r from-amber-600 via-rose-600 to-purple-800';
+    if (coverUrl === 'ocean') return 'bg-gradient-to-r from-cyan-600 via-teal-600 to-blue-800';
+    if (coverUrl === 'carbon') return 'bg-gradient-to-r from-zinc-800 via-neutral-900 to-black';
+    if (coverUrl.startsWith('from-')) return `bg-gradient-to-r ${coverUrl}`;
+    return 'bg-gradient-to-r from-emerald-600 via-teal-700 to-indigo-800';
+  };
+
+  // Open Edit Profile modal with fresh state
+  const handleOpenEditProfile = () => {
+    setEditName(currentUser?.name || '');
+    setEditHeadline(profile.headline);
+    setEditBio(profile.bio);
+    setEditCollege(profile.college || '');
+    setEditDegree(profile.degree || '');
+    setEditCity(currentUser?.city || '');
+    setEditAvailability(profile.availability || 'AVAILABLE');
+    setEditUpi(profile.upiId || '');
+    setEditGithub(profile.githubUrl || '');
+    setEditLinkedin(profile.linkedinUrl || '');
+    setEditBehance(profile.behanceUrl || '');
+    setEditSkillsList([...profile.skills]);
+    setIsEditProfileOpen(true);
+  };
+
+  // Save Edit Profile & Presentation Modal
+  const handleSaveEditProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    const skillsList = editSkills.split(',').map((s) => s.trim()).filter(Boolean);
-    marketplaceStore.updateStudentProfile(currentUser.id, {
-      bio: editBio,
-      headline: editHeadline,
-      skills: skillsList,
-      upiId: editUpi,
-    });
-    setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 3000);
+    if (!editHeadline.trim() || editHeadline.trim().length < 5) {
+      showToast('Professional headline must be at least 5 characters.', 'error');
+      return;
+    }
+    setIsSavingProfile(true);
+
+    try {
+      const socialLinks: { platform: string; url: string }[] = [];
+      if (editGithub.trim()) socialLinks.push({ platform: 'github', url: editGithub.trim() });
+      if (editLinkedin.trim()) socialLinks.push({ platform: 'linkedin', url: editLinkedin.trim() });
+      if (editBehance.trim()) socialLinks.push({ platform: 'behance', url: editBehance.trim() });
+
+      (profile.socialLinks || []).forEach((sl) => {
+        if (!['github', 'linkedin', 'behance'].includes(sl.platform.toLowerCase())) {
+          socialLinks.push(sl);
+        }
+      });
+
+      marketplaceStore.updateCreatorPortfolio(currentUser, userId, {
+        headline: editHeadline.trim(),
+        bio: editBio.trim(),
+        college: editCollege.trim(),
+        degree: editDegree.trim(),
+        availability: editAvailability,
+        upiId: editUpi.trim(),
+        skills: editSkillsList,
+        socialLinks,
+        githubUrl: editGithub.trim() || null,
+        linkedinUrl: editLinkedin.trim() || null,
+        behanceUrl: editBehance.trim() || null,
+      });
+
+      if (editCity.trim() || editName.trim()) {
+        const allUsers = marketplaceStore.getUsers();
+        const uIdx = allUsers.findIndex((u) => u.id === userId);
+        if (uIdx !== -1) {
+          allUsers[uIdx] = {
+            ...allUsers[uIdx],
+            name: editName.trim() || allUsers[uIdx].name,
+            city: editCity.trim() || allUsers[uIdx].city,
+          };
+          marketplaceStore['set']('ptp_users', allUsers);
+        }
+      }
+
+      setProfileRefreshKey((k) => k + 1);
+      setIsEditProfileOpen(false);
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 3000);
+      showToast('Creator profile & presentation updated successfully!');
+      confetti({ particleCount: 30, spread: 50 });
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save profile changes', 'error');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  // Add Skill Directly (Profile Tab & Suggestions)
+  const handleAddSkillDirectly = (skillName: string) => {
+    const s = skillName.trim();
+    if (!s) return;
+    if (s.length > 30) {
+      showToast('Skill name too long (maximum 30 characters).', 'error');
+      return;
+    }
+    if (profile.skills.some((sk) => sk.toLowerCase() === s.toLowerCase())) {
+      showToast(`Skill "${s}" is already in your stack.`, 'info');
+      return;
+    }
+    const updated = [...profile.skills, s];
+    try {
+      marketplaceStore.updateCreatorPortfolio(currentUser, userId, { skills: updated });
+      setQuickSkillInput('');
+      setProfileRefreshKey((k) => k + 1);
+      showToast(`Added "${s}" to your technical stack!`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to add skill', 'error');
+    }
+  };
+
+  // Remove Skill Directly
+  const handleRemoveSkillDirectly = (skillName: string) => {
+    const updated = profile.skills.filter((sk) => sk !== skillName);
+    try {
+      marketplaceStore.updateCreatorPortfolio(currentUser, userId, { skills: updated });
+      setProfileRefreshKey((k) => k + 1);
+      showToast(`Removed "${skillName}" from your stack.`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to remove skill', 'error');
+    }
+  };
+
+  // Add Connection Profile
+  const handleAddConnection = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = connName.trim();
+    if (!name) {
+      showToast('Please enter connection name or handle.', 'error');
+      return;
+    }
+    if (connUrl.trim() && !/^https?:\/\//i.test(connUrl.trim())) {
+      showToast('Please enter a valid URL starting with http:// or https://', 'error');
+      return;
+    }
+
+    const currentConnections = profile.connections || [];
+    const isDuplicate = currentConnections.some(
+      (c) =>
+        c.name.toLowerCase() === name.toLowerCase() ||
+        (connUrl.trim() && c.profileUrl?.toLowerCase() === connUrl.trim().toLowerCase())
+    );
+
+    if (isDuplicate) {
+      showToast(`A connection for "${name}" or this profile URL already exists.`, 'error');
+      return;
+    }
+
+    setIsAddingConnection(true);
+    try {
+      const newConn = {
+        id: `conn-${Date.now()}`,
+        name,
+        platform: connPlatform,
+        profileUrl: connUrl.trim() || undefined,
+        role: connRole.trim() || undefined,
+        addedAt: new Date().toISOString(),
+      };
+
+      const updated = [newConn, ...currentConnections];
+      marketplaceStore.updateCreatorPortfolio(currentUser, userId, { connections: updated });
+      setProfileRefreshKey((k) => k + 1);
+      setIsConnectionModalOpen(false);
+      setConnName('');
+      setConnUrl('');
+      setConnRole('Senior Recruiter');
+      setConnNotes('');
+      showToast(`Connected with ${name}! Profile added to your network.`);
+      confetti({ particleCount: 35, spread: 60 });
+    } catch (err: any) {
+      showToast(err.message || 'Failed to add connection profile', 'error');
+    } finally {
+      setIsAddingConnection(false);
+    }
+  };
+
+  // Remove Connection Profile
+  const handleRemoveConnection = (connId: string) => {
+    const currentConnections = profile.connections || [];
+    const updated = currentConnections.filter((c) => c.id !== connId);
+    try {
+      marketplaceStore.updateCreatorPortfolio(currentUser, userId, { connections: updated });
+      setProfileRefreshKey((k) => k + 1);
+      showToast('Connection removed from your network.');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to remove connection', 'error');
+    }
+  };
+
+  // Save Banner Customization
+  const handleSaveBanner = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingBanner(true);
+    try {
+      const bannerVal = customBannerUrl.trim() || selectedBannerPreset;
+      marketplaceStore.updateCreatorPortfolio(currentUser, userId, { coverImageUrl: bannerVal });
+      setProfileRefreshKey((k) => k + 1);
+      setIsCustomizeBannerOpen(false);
+      showToast('Profile banner customized successfully!');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save banner', 'error');
+    } finally {
+      setIsSavingBanner(false);
+    }
+  };
+
+  // Add / Update Links
+  const handleAddSocialLink = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLinkUrl.trim() || !/^https?:\/\//i.test(newLinkUrl.trim())) {
+      showToast('Please enter a valid link starting with http:// or https://', 'error');
+      return;
+    }
+    const currentLinks = profile.socialLinks || [];
+    const updated = [
+      ...currentLinks.filter((l) => l.platform.toLowerCase() !== newLinkPlatform.toLowerCase()),
+      { platform: newLinkPlatform.toLowerCase(), url: newLinkUrl.trim() },
+    ];
+    try {
+      marketplaceStore.updateCreatorPortfolio(currentUser, userId, { socialLinks: updated });
+      setNewLinkUrl('');
+      setProfileRefreshKey((k) => k + 1);
+      showToast(`Added ${newLinkPlatform} profile link!`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save link', 'error');
+    }
+  };
+
+  // Remove Social Link
+  const handleRemoveSocialLink = (platform: string) => {
+    const currentLinks = profile.socialLinks || [];
+    const updated = currentLinks.filter((l) => l.platform.toLowerCase() !== platform.toLowerCase());
+    try {
+      marketplaceStore.updateCreatorPortfolio(currentUser, userId, { socialLinks: updated });
+      setProfileRefreshKey((k) => k + 1);
+      showToast(`Removed ${platform} profile link.`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to remove link', 'error');
+    }
   };
 
   // Handle Account Deletion
@@ -356,87 +709,193 @@ export const StudentDashboard: React.FC<Props> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-      {/* Dashboard Top Identity & Stats */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 p-1 shadow-md shrink-0">
-            {currentUser?.avatarUrl ? (
-              <img src={currentUser.avatarUrl} alt={currentUser.name || 'Creator'} className="w-full h-full object-cover rounded-[14px]" />
-            ) : (
-              <div className="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center text-white font-bold text-xl">
-                {(currentUser?.name || 'C')[0] || 'C'}
+    <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
+      {/* Dashboard Top Identity & Stats with Customizable Banner */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        {/* Banner Strip */}
+        <div className={`relative h-28 sm:h-36 md:h-40 w-full ${getBannerBackground(profile.coverImageUrl)} overflow-hidden`}>
+          {profile.coverImageUrl && profile.coverImageUrl.startsWith('http') && (
+            <img
+              src={profile.coverImageUrl}
+              alt="Profile Cover"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-950/20 to-transparent" />
+
+          {/* Banner Action Buttons */}
+          <div className="absolute top-3 right-3 flex flex-wrap items-center gap-2 z-10">
+            <button
+              onClick={() => setIsCustomizeBannerOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-900 text-white backdrop-blur-md text-[11px] font-semibold flex items-center gap-1.5 transition border border-white/20 shadow-sm"
+              title="Customize profile banner cover or gradient"
+            >
+              <Palette className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Customize Banner</span>
+            </button>
+            <button
+              onClick={() => setIsConnectionModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600/90 hover:bg-emerald-600 text-white backdrop-blur-md text-[11px] font-semibold flex items-center gap-1.5 transition border border-emerald-400/30 shadow-sm"
+              title="Add a professional connection, recruiter, or peer network"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>+Connection Profile</span>
+            </button>
+            <button
+              onClick={handleOpenEditProfile}
+              className="px-3 py-1.5 rounded-xl bg-white/95 hover:bg-white text-slate-900 backdrop-blur-md text-[11px] font-bold flex items-center gap-1.5 transition border border-slate-200 shadow-sm"
+              title="Edit profile information and presentation"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Edit Profile & Presentation</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Identity & Stats Row */}
+        <div className="p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 -mt-8 sm:-mt-10 relative z-10">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+            <div className="w-20 h-20 rounded-2xl bg-white dark:bg-slate-900 p-1 shadow-lg ring-4 ring-white dark:ring-slate-900 shrink-0">
+              {currentUser?.avatarUrl ? (
+                <img
+                  src={currentUser.avatarUrl}
+                  alt={currentUser.name || 'Creator'}
+                  className="w-full h-full object-cover rounded-[14px]"
+                />
+              ) : (
+                <div className="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center text-white font-bold text-2xl">
+                  {(currentUser?.name || 'C')[0] || 'C'}
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
+                  {currentUser?.name || 'Verified Creator'}
+                </h1>
+                {profile.verificationStatus === 'VERIFIED' ? (
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                    <span>Verified Creator</span>
+                  </span>
+                ) : profile.verificationStatus === 'PENDING' ? (
+                  <button
+                    onClick={() => setIsVerificationModalOpen(true)}
+                    className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold border border-amber-200 dark:border-amber-800 flex items-center gap-1 hover:bg-amber-200 transition"
+                  >
+                    <Clock className="w-3 h-3 text-amber-600" />
+                    <span>Verification Pending</span>
+                  </button>
+                ) : profile.verificationStatus === 'REJECTED' ? (
+                  <button
+                    onClick={() => setIsVerificationModalOpen(true)}
+                    className="text-[10px] px-2.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 font-bold border border-rose-200 dark:border-rose-800 flex items-center gap-1 hover:bg-rose-200 transition"
+                  >
+                    <AlertCircle className="w-3 h-3 text-rose-600" />
+                    <span>Verification Rejected (Resubmit)</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setIsVerificationModalOpen(true)}
+                    className="text-[10px] px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border border-slate-300 dark:border-slate-700 flex items-center gap-1 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-700 transition"
+                  >
+                    <ShieldCheck className="w-3 h-3 text-slate-400" />
+                    <span>Get Verified</span>
+                  </button>
+                )}
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    profile.availability === 'BUSY'
+                      ? 'bg-amber-100 text-amber-800'
+                      : profile.availability === 'UNAVAILABLE'
+                      ? 'bg-slate-100 text-slate-700'
+                      : 'bg-emerald-50 text-emerald-700'
+                  }`}
+                >
+                  {profile.availability === 'BUSY'
+                    ? 'In Active Sprint'
+                    : profile.availability === 'UNAVAILABLE'
+                    ? 'Unavailable'
+                    : 'Available for Micro-Projects'}
+                </span>
               </div>
+              <p className="text-xs text-slate-500 mt-0.5">{profile.headline}</p>
+              <div className="flex items-center gap-3 text-xs text-slate-400 mt-2 flex-wrap">
+                <span>{currentUser?.city || 'India'}</span>
+                <span>·</span>
+                <span>{profile.college || 'University Student'}</span>
+                {profile.degree && (
+                  <>
+                    <span>·</span>
+                    <span>{profile.degree}</span>
+                  </>
+                )}
+              </div>
+
+              {/* Earned Milestones Strip */}
+              <div className="mt-3">
+                <Badges
+                  profile={profile}
+                  user={currentUser || { id: userId, name: userName, email: '', role: 'STUDENT', createdAt: new Date().toISOString() }}
+                  reviews={reviews}
+                  submissions={submissions}
+                  projects={activeProjects}
+                  payments={payments}
+                  variant="strip"
+                  isOwner={true}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Stats Pill Strip & Sign Out */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="grid grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+              <div>
+                <div className="text-[10px] font-semibold text-slate-400 uppercase">Earned (INR)</div>
+                <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                  ₹{(profile.totalEarnedINR ?? 0).toLocaleString('en-IN')}
+                </div>
+              </div>
+              <div className="border-x border-slate-200 dark:border-slate-700 px-3">
+                <div className="text-[10px] font-semibold text-slate-400 uppercase">Completed</div>
+                <div className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400">
+                  {profile.completedProjectsCount ?? 0}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] font-semibold text-slate-400 uppercase">Rating</div>
+                <div className="text-base sm:text-lg font-black text-amber-500 flex items-center justify-center gap-1">
+                  <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                  <span>{(profile.averageRating ?? 5.0).toFixed(1)}</span>
+                </div>
+              </div>
+            </div>
+
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                title="Sign out of account"
+                className="px-3 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-rose-300 dark:hover:border-rose-800 bg-slate-50 dark:bg-slate-800/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-600 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
             )}
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
-                {currentUser?.name || 'Verified Creator'}
-              </h1>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
-                18+ Verified Creator
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">{profile.headline}</p>
-            <div className="flex items-center gap-3 text-xs text-slate-400 mt-2">
-              <span>{currentUser?.city || 'India'}</span>
-              <span>·</span>
-              <span>{profile.college || 'University Student'}</span>
-            </div>
-
-            {/* Earned Milestones Strip */}
-            <div className="mt-3">
-              <Badges
-                profile={profile}
-                user={currentUser || { id: userId, name: userName, email: '', role: 'STUDENT', createdAt: new Date().toISOString() }}
-                reviews={reviews}
-                submissions={submissions}
-                projects={activeProjects}
-                payments={payments}
-                variant="strip"
-                isOwner={true}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Pill Strip & Sign Out */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="grid grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
-            <div>
-              <div className="text-[10px] font-semibold text-slate-400 uppercase">Earned (INR)</div>
-              <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                ₹{(profile.totalEarnedINR ?? 0).toLocaleString('en-IN')}
-              </div>
-            </div>
-            <div className="border-x border-slate-200 dark:border-slate-700 px-3">
-              <div className="text-[10px] font-semibold text-slate-400 uppercase">Completed</div>
-              <div className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400">
-                {profile.completedProjectsCount ?? 0}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] font-semibold text-slate-400 uppercase">Rating</div>
-              <div className="text-base sm:text-lg font-black text-amber-500 flex items-center justify-center gap-1">
-                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                <span>{(profile.averageRating ?? 5.0).toFixed(1)}</span>
-              </div>
-            </div>
-          </div>
-
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              title="Sign out of account"
-              className="px-3 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-rose-300 dark:hover:border-rose-800 bg-slate-50 dark:bg-slate-800/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-600 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
-            </button>
-          )}
         </div>
       </div>
+
+      {/* Proof-to-Pay End-to-End Workflow Journey Stepper */}
+      <WorkflowJourneyTracker
+        currentUser={currentUser}
+        onNavigate={onNavigate}
+        onOpenProfileModal={handleOpenEditProfile}
+        onOpenVerificationModal={() => setIsVerificationModalOpen(true)}
+      />
 
       {/* Quick Actions Row */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3.5">
@@ -1167,6 +1626,60 @@ export const StudentDashboard: React.FC<Props> = ({
                         )}
                       </div>
                     )}
+
+                    {/* Completed Project Status & Review Trigger */}
+                    {proj.status === 'COMPLETED' && (
+                      <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <span className="font-bold text-xs text-emerald-900 dark:text-emerald-300">
+                              Project Completed & Deliverables Approved
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono">
+                            Verified Outcome Delivered
+                          </span>
+                        </div>
+
+                        {/* Verified Review Section */}
+                        {(() => {
+                          const existingReview = reviews.find((r) => r.projectId === proj.id && r.reviewerId === currentUser.id);
+                          if (existingReview) {
+                            return (
+                              <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200/60 dark:border-emerald-800/40 text-xs space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-slate-700 dark:text-slate-300">Your Verified Review for Client:</span>
+                                  <span className="text-amber-500 font-bold flex items-center gap-0.5">
+                                    ★ {existingReview.rating}.0
+                                  </span>
+                                </div>
+                                <p className="text-slate-600 dark:text-slate-400 italic">"{existingReview.comment}"</p>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                              <span className="text-xs text-slate-600 dark:text-slate-400">
+                                Leave a verified client review to build transparent marketplace reputation.
+                              </span>
+                              <button
+                                onClick={() => {
+                                  setReviewingProjectId(proj.id);
+                                  setReviewRating(5);
+                                  setReviewComment('');
+                                  setReviewDeliverableSummary(proj.deliverables.map(d => d.title).join(', '));
+                                }}
+                                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 shrink-0"
+                              >
+                                <Star className="w-3.5 h-3.5" />
+                                <span>Leave Verified Review</span>
+                              </button>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1530,77 +2043,488 @@ export const StudentDashboard: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Tab 6: Profile & Skills */}
+      {/* Tab 6: Profile & Skills Management */}
       {activeTab === 'profile' && (
-        <form onSubmit={handleSaveProfile} className="max-w-2xl bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-5">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">Edit Creator Profile</h2>
-
-          {profileSaved && (
-            <div className="p-3 rounded-xl bg-emerald-50 text-emerald-700 text-xs">
-              Profile updated successfully!
+        <div className="space-y-6 max-w-4xl">
+          {/* Header Action Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span>Creator Profile & Presentation</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-bold">
+                  Live
+                </span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Customize your presentation, skills, external links, and professional connections visible to hiring businesses.
+              </p>
             </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Professional Headline
-            </label>
-            <input
-              type="text"
-              value={editHeadline}
-              onChange={(e) => setEditHeadline(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
-              required
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setIsCustomizeBannerOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center gap-1.5"
+              >
+                <Palette className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Customize Banner</span>
+              </button>
+              <button
+                onClick={() => setIsConnectionModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center gap-1.5"
+              >
+                <UserPlus className="w-3.5 h-3.5 text-teal-500" />
+                <span>+Connection Profile</span>
+              </button>
+              <button
+                onClick={handleOpenEditProfile}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit Profile & Presentation</span>
+              </button>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Bio & Experience
-            </label>
-            <textarea
-              rows={4}
-              value={editBio}
-              onChange={(e) => setEditBio(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
-              required
-            />
+          {/* Section 1: Presentation Overview Card */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] text-slate-400">
+                Presentation Overview
+              </h3>
+              <button
+                onClick={handleOpenEditProfile}
+                className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+              >
+                <Edit3 className="w-3 h-3" />
+                <span>Modify Details</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Headline</span>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  {profile.headline || 'No headline specified yet.'}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Education & Institution</span>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  {profile.degree ? `${profile.degree} · ` : ''}{profile.college || 'College not specified'}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-1 md:col-span-2">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Creator Bio</span>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {profile.bio || 'Add a bio describing your design/engineering focus and background.'}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Work Availability</span>
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                    {profile.availability === 'AVAILABLE' ? '🟢 Open to New Projects' : '🟡 Busy / Selected Projects Only'}
+                  </div>
+                </div>
+                <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold">
+                  {profile.availability || 'AVAILABLE'}
+                </span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Payout UPI ID</span>
+                  <div className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                    {profile.upiId || 'Not set (Required for INR payouts)'}
+                  </div>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 font-mono">
+                  Direct UTR
+                </span>
+              </div>
+
+              {/* Creator Verification Status Card */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-2 md:col-span-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] uppercase font-bold text-slate-400">Institutional Identity & Verification</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
+                        profile.verificationStatus === 'VERIFIED'
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                          : profile.verificationStatus === 'PENDING'
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                          : profile.verificationStatus === 'REJECTED'
+                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                          : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                      }`}>
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>Status: {profile.verificationStatus || 'UNVERIFIED'}</span>
+                      </span>
+                      {profile.verificationDetails?.documentType && (
+                        <span className="text-xs text-slate-500">
+                          {profile.verificationDetails.documentType}: <code className="font-mono">{profile.verificationDetails.documentNumber}</code>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsVerificationModalOpen(true)}
+                    className="px-3.5 py-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-semibold hover:opacity-90 transition flex items-center gap-1.5 self-start sm:self-auto shrink-0"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{profile.verificationStatus === 'VERIFIED' ? 'View Credentials' : profile.verificationStatus === 'PENDING' ? 'Update Evidence' : 'Submit Verification'}</span>
+                  </button>
+                </div>
+                {profile.verificationDetails?.adminNotes && (
+                  <p className="text-[11px] text-slate-500 italic bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                    Editorial Notes: {profile.verificationDetails.adminNotes}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Skills (comma separated)
-            </label>
-            <input
-              type="text"
-              value={editSkills}
-              onChange={(e) => setEditSkills(e.target.value)}
-              placeholder="React, TypeScript, Figma, Tailwind CSS"
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
-              required
-            />
+          {/* Section 2: Technical Stack & Skills Management */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>Technical Stack & Skills</span>
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 text-xs font-bold">
+                    {profile.skills.length} Added
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Highlighted to hiring businesses when evaluating project applications and skill matches.
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Skill Input Bar */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (quickSkillInput.trim()) {
+                  handleAddSkillDirectly(quickSkillInput.trim());
+                }
+              }}
+              className="flex items-center gap-2"
+            >
+              <input
+                type="text"
+                value={quickSkillInput}
+                onChange={(e) => setQuickSkillInput(e.target.value)}
+                placeholder="Type a skill (e.g. Next.js, Flutter, Three.js, Figma) and press Enter..."
+                className="flex-1 px-4 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition flex items-center gap-1.5 shrink-0 shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Skill</span>
+              </button>
+            </form>
+
+            {/* Quick Skill Suggestions */}
+            <div className="space-y-1.5">
+              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                Quick Suggestions:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  'React',
+                  'TypeScript',
+                  'Tailwind CSS',
+                  'Next.js',
+                  'Figma',
+                  'UI/UX Design',
+                  'Node.js',
+                  'Python',
+                  'PostgreSQL',
+                  'GraphQL',
+                  'Docker',
+                  'Three.js',
+                  'Mobile App Dev',
+                  'Brand Identity',
+                ].map((s) => {
+                  const alreadyHas = profile.skills.some((sk) => sk.toLowerCase() === s.toLowerCase());
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={alreadyHas}
+                      onClick={() => handleAddSkillDirectly(s)}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg transition flex items-center gap-1 ${
+                        alreadyHas
+                          ? 'bg-slate-100 dark:bg-slate-800/40 text-slate-400 cursor-default opacity-60'
+                          : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 font-medium'
+                      }`}
+                    >
+                      {alreadyHas ? '✓' : '+'} {s}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Active Skills Chip List */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-2">
+                Active Skills ({profile.skills.length}):
+              </span>
+              {profile.skills.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/30 rounded-2xl">
+                  No skills listed yet. Type a skill or pick one from the quick suggestions above.
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {profile.skills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold group hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 transition"
+                    >
+                      <span>{skill}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSkillDirectly(skill)}
+                        className="text-slate-400 group-hover:text-rose-600 hover:scale-110 transition p-0.5"
+                        title={`Remove ${skill}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Payout UPI ID (for INR payment records)
-            </label>
-            <input
-              type="text"
-              value={editUpi}
-              onChange={(e) => setEditUpi(e.target.value)}
-              placeholder="yourname@okhdfcbank"
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
-            />
+          {/* Section 3: Online Profiles & Links */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-teal-600" />
+                  <span>Online Profiles & Web Links</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Connect your GitHub, LinkedIn, Behance, and portfolio showcases.
+                </p>
+              </div>
+            </div>
+
+            {/* Primary Platform Links */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">GitHub Profile</span>
+                {profile.githubUrl ? (
+                  <a
+                    href={profile.githubUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 truncate"
+                  >
+                    <span>{profile.githubUrl.replace('https://', '')}</span>
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                  </a>
+                ) : (
+                  <div className="text-xs text-slate-400 italic">Not connected</div>
+                )}
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">LinkedIn Profile</span>
+                {profile.linkedinUrl ? (
+                  <a
+                    href={profile.linkedinUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 truncate"
+                  >
+                    <span>{profile.linkedinUrl.replace('https://', '')}</span>
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                  </a>
+                ) : (
+                  <div className="text-xs text-slate-400 italic">Not connected</div>
+                )}
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Behance / Dribbble</span>
+                {profile.behanceUrl ? (
+                  <a
+                    href={profile.behanceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-1 truncate"
+                  >
+                    <span>{profile.behanceUrl.replace('https://', '')}</span>
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                  </a>
+                ) : (
+                  <div className="text-xs text-slate-400 italic">Not connected</div>
+                )}
+              </div>
+            </div>
+
+            {/* Custom Extra Links List */}
+            {profile.socialLinks && profile.socialLinks.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Custom Online Links:</span>
+                <div className="space-y-2">
+                  {profile.socialLinks.map((sl, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold uppercase text-[10px]">
+                          {sl.platform}
+                        </span>
+                        <a
+                          href={sl.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-slate-800 dark:text-slate-200 hover:text-emerald-600 transition truncate"
+                        >
+                          {sl.url}
+                        </a>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSocialLink(sl.platform)}
+                        className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition shrink-0 ml-2"
+                        title="Remove link"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Add Custom Link Form */}
+            <form onSubmit={handleAddSocialLink} className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-3">
+              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <Plus className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Add Extra Web or Portfolio Link</span>
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select
+                  value={newLinkPlatform}
+                  onChange={(e) => setNewLinkPlatform(e.target.value)}
+                  className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-medium"
+                >
+                  <option value="portfolio">Personal Portfolio</option>
+                  <option value="dribbble">Dribbble</option>
+                  <option value="twitter">X / Twitter</option>
+                  <option value="gitlab">GitLab</option>
+                  <option value="medium">Medium / Substack</option>
+                  <option value="other">Other Link</option>
+                </select>
+                <input
+                  type="url"
+                  value={newLinkUrl}
+                  onChange={(e) => setNewLinkUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="sm:col-span-2 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono"
+                  required
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-semibold hover:opacity-90 transition flex items-center gap-1.5"
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  <span>Save Link</span>
+                </button>
+              </div>
+            </form>
           </div>
 
-          <button
-            type="submit"
-            className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm transition"
-          >
-            Save Profile Changes
-          </button>
-        </form>
+          {/* Section 4: Professional Connections */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Professional Connections & Endorsements</span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-bold">
+                    {(profile.connections || []).length} Connected
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Link verified recruiters, collaborating creators, mentors, and corporate contacts to reinforce credibility.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsConnectionModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition flex items-center gap-1.5 self-start sm:self-auto shadow-2xs"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>+Connection Profile</span>
+              </button>
+            </div>
+
+            {(!profile.connections || profile.connections.length === 0) ? (
+              <div className="p-8 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/30 rounded-2xl space-y-2">
+                <UserCheck className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
+                <p className="font-semibold text-slate-700 dark:text-slate-300">No Professional Connections Added Yet</p>
+                <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                  Click "+Connection Profile" to add recruiters, past clients, or peer creators you have collaborated with.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {profile.connections.map((conn) => (
+                  <div
+                    key={conn.id}
+                    className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-start justify-between gap-3 text-xs"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 dark:text-white">{conn.name}</span>
+                        {conn.platform && (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold">
+                            {conn.platform}
+                          </span>
+                        )}
+                      </div>
+                      {conn.role && (
+                        <p className="text-[11px] text-slate-500 font-medium">{conn.role}</p>
+                      )}
+                      {conn.profileUrl && (
+                        <a
+                          href={conn.profileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 pt-0.5"
+                        >
+                          <span className="truncate max-w-[200px]">{conn.profileUrl.replace('https://', '')}</span>
+                          <ExternalLink className="w-3 h-3 shrink-0" />
+                        </a>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleRemoveConnection(conn.id)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition shrink-0"
+                      title="Remove connection"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Tab 7: Settings & Account Deletion */}
@@ -1626,10 +2550,14 @@ export const StudentDashboard: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs space-y-2">
-            <h4 className="font-bold text-slate-900 dark:text-white">Adult Participation Policy</h4>
-            <p className="text-slate-600 dark:text-slate-400">
-              Your age is recorded as {profile.age} years. Proof-to-Pay restricts marketplace participation to adults 18 or older to guarantee legally binding project deliverables.
+          {/* Platform Verification Policy */}
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs space-y-1.5">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <h4 className="font-bold text-slate-900 dark:text-white">Creator Protection & Verification</h4>
+            </div>
+            <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-[11px]">
+              Proof-to-Pay verifies student deliverable milestones and protects 100% of agreed compensation. Zero commissions are deducted from your project payouts, and direct bank UTR settlement numbers are provided on deliverable confirmation.
             </p>
           </div>
 
@@ -2026,6 +2954,670 @@ export const StudentDashboard: React.FC<Props> = ({
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>{isSubmittingSupport ? 'Submitting...' : 'Submit Support Request'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 7: EDIT PROFILE & PRESENTATION MODAL */}
+      {isEditProfileOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8 space-y-0">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-emerald-50/50 dark:bg-emerald-950/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-xs shrink-0">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                    Edit Profile & Presentation
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Update your public presentation, bio, institution, links, and payout ID
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsEditProfileOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveEditProfile} className="p-6 max-h-[75vh] overflow-y-auto space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Display Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    City / Location
+                  </label>
+                  <input
+                    type="text"
+                    value={editCity}
+                    onChange={(e) => setEditCity(e.target.value)}
+                    placeholder="e.g., Bengaluru, Mumbai, Delhi"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Professional Headline *
+                </label>
+                <input
+                  type="text"
+                  value={editHeadline}
+                  onChange={(e) => setEditHeadline(e.target.value)}
+                  placeholder="e.g., Full-Stack TypeScript Engineer & UI Systems Designer"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    College / University
+                  </label>
+                  <input
+                    type="text"
+                    value={editCollege}
+                    onChange={(e) => setEditCollege(e.target.value)}
+                    placeholder="e.g., IIT Bombay / BITS Pilani"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Degree / Specialization
+                  </label>
+                  <input
+                    type="text"
+                    value={editDegree}
+                    onChange={(e) => setEditDegree(e.target.value)}
+                    placeholder="e.g., B.Tech Computer Science"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Creator Bio & Overview *
+                </label>
+                <textarea
+                  rows={3}
+                  value={editBio}
+                  onChange={(e) => setEditBio(e.target.value)}
+                  placeholder="Describe your design and engineering experience, past client achievements, and preferred tech stack..."
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Work Availability
+                  </label>
+                  <select
+                    value={editAvailability}
+                    onChange={(e) => setEditAvailability(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-medium"
+                  >
+                    <option value="AVAILABLE">Available for New Projects</option>
+                    <option value="BUSY">Selected Projects Only (Busy)</option>
+                    <option value="UNAVAILABLE">Temporarily Unavailable</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Payout UPI ID (Direct Settlements)
+                  </label>
+                  <input
+                    type="text"
+                    value={editUpi}
+                    onChange={(e) => setEditUpi(e.target.value)}
+                    placeholder="yourname@okaxis"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Online Social Links */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-3">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Online Profiles & Links
+                </span>
+                <div className="space-y-2">
+                  <input
+                    type="url"
+                    value={editGithub}
+                    onChange={(e) => setEditGithub(e.target.value)}
+                    placeholder="GitHub URL: https://github.com/..."
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono"
+                  />
+                  <input
+                    type="url"
+                    value={editLinkedin}
+                    onChange={(e) => setEditLinkedin(e.target.value)}
+                    placeholder="LinkedIn URL: https://linkedin.com/in/..."
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono"
+                  />
+                  <input
+                    type="url"
+                    value={editBehance}
+                    onChange={(e) => setEditBehance(e.target.value)}
+                    placeholder="Behance / Dribbble URL: https://behance.net/..."
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Skills Editor */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Skills ({editSkillsList.length})
+                </label>
+                <div className="flex flex-wrap gap-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 min-h-[48px]">
+                  {editSkillsList.map((sk) => (
+                    <span
+                      key={sk}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 text-xs font-semibold"
+                    >
+                      <span>{sk}</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditSkillsList(editSkillsList.filter((s) => s !== sk))}
+                        className="text-indigo-400 hover:text-rose-600 transition"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsEditProfileOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingProfile}
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition flex items-center gap-2 disabled:opacity-50"
+                >
+                  <span>{isSavingProfile ? 'Saving Changes...' : 'Save Profile Changes'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 8: CUSTOMIZE BANNER MODAL */}
+      {isCustomizeBannerOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8 space-y-0">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-indigo-50/50 dark:bg-indigo-950/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-xs shrink-0">
+                  <Palette className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                    Customize Profile Banner
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Select a gradient theme or enter an external image URL
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCustomizeBannerOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-5">
+              {/* Live Preview Box */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                  Live Banner Preview:
+                </span>
+                <div
+                  className={`h-28 rounded-2xl border border-slate-200 dark:border-slate-700 relative overflow-hidden flex items-end p-3 shadow-inner ${
+                    customBannerUrl.trim().startsWith('http')
+                      ? 'bg-cover bg-center'
+                      : getBannerBackground(selectedBannerPreset)
+                  }`}
+                  style={
+                    customBannerUrl.trim().startsWith('http')
+                      ? { backgroundImage: `url(${customBannerUrl.trim()})` }
+                      : undefined
+                  }
+                >
+                  <div className="flex items-center gap-2 bg-slate-900/70 backdrop-blur-xs px-3 py-1 rounded-xl text-white text-xs font-bold">
+                    <span>{userName}</span>
+                    <span className="text-[10px] text-emerald-400">✓ Verified</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Theme Presets */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  Select Theme Gradient Preset:
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {BANNER_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedBannerPreset(preset.id);
+                        setCustomBannerUrl('');
+                      }}
+                      className={`p-2.5 rounded-xl border text-left transition flex items-center gap-2 ${
+                        selectedBannerPreset === preset.id && !customBannerUrl.trim()
+                          ? 'border-indigo-600 ring-2 ring-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-950/30'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className={`w-6 h-6 rounded-lg bg-gradient-to-r ${preset.gradient} shrink-0 shadow-xs`} />
+                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                        {preset.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Image URL */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                  Or Custom Image URL (Optional):
+                </label>
+                <input
+                  type="url"
+                  value={customBannerUrl}
+                  onChange={(e) => setCustomBannerUrl(e.target.value)}
+                  placeholder="https://images.unsplash.com/... or https://..."
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsCustomizeBannerOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveBanner}
+                  className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition flex items-center gap-2"
+                >
+                  <Palette className="w-3.5 h-3.5" />
+                  <span>Apply Banner</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 9: +CONNECTION PROFILE MODAL */}
+      {isConnectionModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8 space-y-0">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-teal-50/50 dark:bg-teal-950/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-teal-100 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center shadow-xs shrink-0">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                    Add Professional Connection
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Link verified recruiters, clients, collaborating peers, or mentors
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsConnectionModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleAddConnection} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Connection Category *
+                </label>
+                <select
+                  value={connPlatform}
+                  onChange={(e) => setConnPlatform(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-medium"
+                >
+                  <option value="Recruiter">Corporate / Tech Recruiter</option>
+                  <option value="Peer Creator">Peer Student / Creator</option>
+                  <option value="Client">Past Hiring Client / Business</option>
+                  <option value="Mentor">Industry Mentor / Professor</option>
+                  <option value="LinkedIn">LinkedIn Contact</option>
+                  <option value="GitHub">GitHub Collaborator</option>
+                  <option value="Other">Professional Network</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Full Name or Handle *
+                </label>
+                <input
+                  type="text"
+                  value={connName}
+                  onChange={(e) => setConnName(e.target.value)}
+                  placeholder="e.g., Priya Sharma or @priyatech"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Profile or Portfolio URL
+                </label>
+                <input
+                  type="text"
+                  value={connUrl}
+                  onChange={(e) => setConnUrl(e.target.value)}
+                  placeholder="https://linkedin.com/in/... or https://github.com/..."
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Role / Organization / Context
+                </label>
+                <input
+                  type="text"
+                  value={connRole}
+                  onChange={(e) => setConnRole(e.target.value)}
+                  placeholder="e.g., Senior Tech Recruiter at Razorpay"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsConnectionModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition flex items-center gap-2"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Add Connection</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 10: SUBMIT STUDENT VERIFICATION MODAL */}
+      {isVerificationModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8 space-y-0">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-emerald-50/50 dark:bg-emerald-950/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-xs shrink-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                    Submit Creator Verification
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Verify student enrollment or creative credential to unlock Verified Creator status
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsVerificationModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmitVerification} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Document / Evidence Type *
+                </label>
+                <select
+                  value={verificationDocType}
+                  onChange={(e) => setVerificationDocType(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-medium"
+                >
+                  <option value="College Student Identity Card">University / College Student ID Card</option>
+                  <option value="Institutional Department Email">Official .edu / .ac.in College Email</option>
+                  <option value="Campus Enrollment / Fee Receipt">Active Campus Semester Fee Receipt</option>
+                  <option value="Government Photo ID (PAN / Aadhaar)">Government Identity Card (Adult / Student)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Student Roll / Enrollment / ID Number *
+                </label>
+                <input
+                  type="text"
+                  value={verificationDocNumber}
+                  onChange={(e) => setVerificationDocNumber(e.target.value)}
+                  placeholder="e.g. DTU/2023/CSE/084 or IITB-2024-MECH-102"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Institutional College Email (Optional)
+                </label>
+                <input
+                  type="email"
+                  value={verificationCollegeEmail}
+                  onChange={(e) => setVerificationCollegeEmail(e.target.value)}
+                  placeholder="e.g. yourname@dtu.ac.in or student@iitb.ac.in"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  ID Document Image / Cloud Drive URL (Optional)
+                </label>
+                <input
+                  type="url"
+                  value={verificationIdCardUrl}
+                  onChange={(e) => setVerificationIdCardUrl(e.target.value)}
+                  placeholder="https://drive.google.com/... or https://..."
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 space-y-1">
+                <div className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Proof-to-Pay Verification Protocol</span>
+                </div>
+                <p>
+                  Platform administrators verify your enrollment and portfolio evidence to prevent impersonation and protect direct milestone client payments.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsVerificationModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingVerification}
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition flex items-center gap-2 disabled:opacity-50"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>{isSubmittingVerification ? 'Submitting...' : 'Submit for Verification'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 11: LEAVE VERIFIED CLIENT REVIEW MODAL */}
+      {reviewingProjectId && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8 space-y-0">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-amber-50/50 dark:bg-amber-950/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-xs shrink-0">
+                  <Star className="w-5 h-5 fill-amber-500 text-amber-500" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                    Leave Verified Client Review
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Share feedback on business client communication, scope clarity & settlement
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setReviewingProjectId(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmitCreatorReview} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                  Client Collaboration Rating *
+                </label>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReviewRating(star)}
+                      className="p-1 text-2xl transition hover:scale-110"
+                    >
+                      <Star
+                        className={`w-7 h-7 ${
+                          star <= reviewRating
+                            ? 'fill-amber-400 text-amber-400'
+                            : 'text-slate-300 dark:text-slate-700'
+                        }`}
+                      />
+                    </button>
+                  ))}
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 ml-2">
+                    {reviewRating}.0 / 5.0
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Verified Deliverable Summary
+                </label>
+                <input
+                  type="text"
+                  value={reviewDeliverableSummary}
+                  onChange={(e) => setReviewDeliverableSummary(e.target.value)}
+                  placeholder="e.g. Next.js App Router MVP, Figma Design System, Brand Guidelines"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Collaboration Review & Feedback *
+                </label>
+                <textarea
+                  rows={4}
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  placeholder="Describe your working experience with this client: responsiveness, clarity of specifications, milestone feedback, and promptness of direct UPI/bank settlement..."
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white leading-relaxed"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setReviewingProjectId(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingReview}
+                  className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md transition flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Star className="w-3.5 h-3.5 fill-white" />
+                  <span>{isSubmittingReview ? 'Submitting...' : 'Submit Verified Review'}</span>
                 </button>
               </div>
             </form>

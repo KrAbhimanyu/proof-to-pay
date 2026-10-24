@@ -110,10 +110,31 @@ export const AuthModal: React.FC<Props> = ({
     setErrorMsg(null);
     setIsLoading(true);
 
+    const input = loginEmail.trim();
+    if (!input) {
+      setErrorMsg('Please enter your User ID or Email Address.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       if (isLive) {
         // --- Live Supabase Authentication ---
-        const authResult = await supabaseService.signInWithEmail(loginEmail.trim(), loginPassword);
+        // If input does not contain '@', check if an email maps to this User ID
+        let resolvedEmail = input;
+        if (!input.includes('@')) {
+          const profile = await supabaseService.getProfile(input).catch(() => null);
+          if (profile?.email) {
+            resolvedEmail = profile.email;
+          } else {
+            const localU = marketplaceStore.getUsers().find((u) => u.id.toLowerCase() === input.toLowerCase());
+            if (localU?.email) {
+              resolvedEmail = localU.email;
+            }
+          }
+        }
+
+        const authResult = await supabaseService.signInWithEmail(resolvedEmail, loginPassword);
         const authUser = authResult?.user;
         if (!authUser) {
           throw new Error('Authentication succeeded but no active user session was returned.');
@@ -132,6 +153,7 @@ export const AuthModal: React.FC<Props> = ({
 
         try {
           localStorage.setItem('ptp_session_provider', 'supabase');
+          localStorage.setItem('ptp_current_user_id', profile.id);
         } catch {}
 
         marketplaceStore.setCurrentUserId(profile.id);
@@ -144,9 +166,14 @@ export const AuthModal: React.FC<Props> = ({
         }
 
         const users = marketplaceStore.getUsers();
-        const user = users.find((u) => u.email.toLowerCase() === loginEmail.trim().toLowerCase());
+        const user = users.find(
+          (u) =>
+            u.email.toLowerCase() === input.toLowerCase() ||
+            u.id.toLowerCase() === input.toLowerCase() ||
+            (u.name && u.name.toLowerCase().replace(/\s+/g, '') === input.toLowerCase().replace(/\s+/g, ''))
+        );
         if (!user) {
-          setErrorMsg('No user found with this email. In demo mode, select a test account below.');
+          setErrorMsg('No user found matching this User ID or Email. Please check credentials or select a test account below.');
           return;
         }
         if (user.isSuspended) {
@@ -156,6 +183,7 @@ export const AuthModal: React.FC<Props> = ({
 
         try {
           localStorage.setItem('ptp_session_provider', 'demo');
+          localStorage.setItem('ptp_current_user_id', user.id);
         } catch {}
 
         marketplaceStore.setCurrentUserId(user.id);
@@ -164,7 +192,7 @@ export const AuthModal: React.FC<Props> = ({
       }
     } catch (err: any) {
       console.error('Login error:', err);
-      setErrorMsg(err.message || 'Invalid email or password.');
+      setErrorMsg(err.message || 'Invalid User ID, email, or password.');
     } finally {
       setIsLoading(false);
     }
@@ -244,6 +272,7 @@ export const AuthModal: React.FC<Props> = ({
 
         try {
           localStorage.setItem('ptp_session_provider', 'supabase');
+          localStorage.setItem('ptp_current_user_id', userObj.id);
         } catch {}
 
         marketplaceStore.setCurrentUserId(userObj.id);
@@ -294,6 +323,7 @@ export const AuthModal: React.FC<Props> = ({
 
         try {
           localStorage.setItem('ptp_session_provider', 'demo');
+          localStorage.setItem('ptp_current_user_id', newUser.id);
         } catch {}
 
         marketplaceStore.setCurrentUserId(newUser.id);
@@ -419,6 +449,7 @@ export const AuthModal: React.FC<Props> = ({
 
         try {
           localStorage.setItem('ptp_session_provider', 'demo');
+          localStorage.setItem('ptp_current_user_id', newUser.id);
         } catch {}
 
         marketplaceStore.setCurrentUserId(newUser.id);
@@ -666,7 +697,7 @@ export const AuthModal: React.FC<Props> = ({
             <div className="w-full border-t border-slate-200 dark:border-slate-800" />
           </div>
           <div className="relative flex justify-center text-[10px] uppercase">
-            <span className="bg-white dark:bg-slate-900 px-2 text-slate-400 font-medium">or continue with email</span>
+            <span className="bg-white dark:bg-slate-900 px-2 text-slate-400 font-medium">or continue with user ID or email</span>
           </div>
         </div>
 
@@ -674,12 +705,12 @@ export const AuthModal: React.FC<Props> = ({
         {mode === 'login' && (
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email Address</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">User ID or Email *</label>
               <input
-                type="email"
+                type="text"
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
-                placeholder="your.email@example.com"
+                placeholder="User ID (e.g. student-1) or email address"
                 className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
                 required
               />
@@ -723,11 +754,11 @@ export const AuthModal: React.FC<Props> = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Age (18+ Policy) *</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Age (Years) *</label>
                 <input
                   type="number"
-                  min={18}
-                  max={65}
+                  min={1}
+                  max={100}
                   value={studentAge}
                   onChange={(e) => setStudentAge(Number(e.target.value))}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"

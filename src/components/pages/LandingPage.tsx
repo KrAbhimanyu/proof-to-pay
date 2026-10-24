@@ -58,7 +58,7 @@ export const LandingPage: React.FC<Props> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
               <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border-2 border-emerald-500/40 hover:border-emerald-500 shadow-sm transition space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">For Creators (18+)</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">For Creators</span>
                   <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-semibold px-2 py-0.5 rounded-full">₹0 Fees</span>
                 </div>
                 <h4 className="font-bold text-sm text-slate-900 dark:text-white">Get Paid & Build Real Proof</h4>
@@ -312,7 +312,7 @@ export const LandingPage: React.FC<Props> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Strict 18+ adult student protection</span>
+                  <span>Direct creator milestone protection</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />

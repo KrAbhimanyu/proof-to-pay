@@ -73,6 +73,17 @@ class AuthViewModel : ViewModel() {
         AuthRepository.submitBusinessVerification(legalEntity, docType, docNumber)
     }
 
+    fun submitStudentVerification(
+        docType: String,
+        docNumber: String,
+        collegeEmail: String? = null,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        val result = AuthRepository.submitStudentVerification(docType, docNumber, collegeEmail)
+        result.onSuccess { onSuccess() }.onFailure { onError(it.message ?: "Failed to submit verification") }
+    }
+
     fun switchRoleDemo(user: UserProfile) {
         AuthRepository.switchUser(user)
     }
@@ -151,6 +162,38 @@ class CreatorViewModel : ViewModel() {
 
     fun respondToOffer(offerId: String, accept: Boolean) {
         OfferRepository.respondToOffer(offerId, accept)
+    }
+
+    private val _confirmingPaymentIds = MutableStateFlow<Set<String>>(emptySet())
+    val confirmingPaymentIds: StateFlow<Set<String>> = _confirmingPaymentIds.asStateFlow()
+
+    fun confirmPaymentReceipt(
+        paymentId: String,
+        studentId: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        if (_confirmingPaymentIds.value.contains(paymentId)) return
+        _confirmingPaymentIds.value = _confirmingPaymentIds.value + paymentId
+        viewModelScope.launch {
+            try {
+                val result = PaymentRepository.confirmReceiptRemote(paymentId, studentId)
+                result.onSuccess { onSuccess() }.onFailure { onError(it.message ?: "Failed to confirm payment receipt") }
+            } finally {
+                _confirmingPaymentIds.value = _confirmingPaymentIds.value - paymentId
+            }
+        }
+    }
+
+    fun disputePayment(
+        paymentId: String,
+        studentId: String,
+        reason: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        val result = PaymentRepository.disputePayment(paymentId, studentId, reason)
+        result.onSuccess { onSuccess() }.onFailure { onError(it.message ?: "Failed to dispute payment") }
     }
 }
 

@@ -120,7 +120,16 @@ export const INITIAL_STUDENT_PROFILES: Record<string, StudentProfile> = {
       { platform: 'github', url: 'https://github.com/aarav-sharma' },
       { platform: 'linkedin', url: 'https://linkedin.com/in/aarav-sharma-dev' },
       { platform: 'behance', url: 'https://behance.net/aaravsharma' }
-    ]
+    ],
+    verificationStatus: 'VERIFIED',
+    verificationDetails: {
+      documentType: 'DTU Student Roll & Official Institutional Email',
+      documentNumber: 'DTU/2023/CSE/084',
+      collegeEmail: 'aarav.sharma@dtu.ac.in',
+      submittedAt: '2026-08-01T09:00:00.000Z',
+      verifiedAt: '2026-08-02T11:00:00.000Z',
+      adminNotes: 'Verified enrollment with official DTU CSE department email and student ID.'
+    }
   },
   'student-2': {
     userId: 'student-2',
@@ -151,7 +160,16 @@ export const INITIAL_STUDENT_PROFILES: Record<string, StudentProfile> = {
       { platform: 'behance', url: 'https://behance.net/ananyaiyer' },
       { platform: 'linkedin', url: 'https://linkedin.com/in/ananyaiyer' },
       { platform: 'github', url: 'https://github.com/ananyaiyer' }
-    ]
+    ],
+    verificationStatus: 'VERIFIED',
+    verificationDetails: {
+      documentType: 'NID Student Identity Card & Studio Verification',
+      documentNumber: 'NID-AHM-DES-2022-41',
+      collegeEmail: 'ananya.iyer@nid.edu',
+      submittedAt: '2026-07-28T14:00:00.000Z',
+      verifiedAt: '2026-07-29T10:15:00.000Z',
+      adminNotes: 'Verified NID institutional credentials and verified design portfolio.'
+    }
   }
 };
 

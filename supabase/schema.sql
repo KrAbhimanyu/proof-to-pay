@@ -487,15 +487,15 @@ security definer
 set search_path = public
 as $$
 begin
-  if not public.is_admin() then
+  if not public.is_admin() and current_setting('app.payment_settlement_authorized', true) is distinct from 'true' then
     if NEW.average_rating is distinct from OLD.average_rating then
-      raise exception 'Security Error: Rating is calculated authoritatively from verified completed reviews.';
+      raise exception 'Security Error: Rating is calculated authoritatively from verified completed reviews.' using errcode = '42501';
     end if;
     if NEW.completed_projects_count <> OLD.completed_projects_count then
-      raise exception 'Security Error: Completed project count is computed from verified deliveries.';
+      raise exception 'Security Error: Completed project count is computed from verified deliveries.' using errcode = '42501';
     end if;
     if NEW.total_earned_paise <> OLD.total_earned_paise then
-      raise exception 'Security Error: Total earnings cannot be manually adjusted.';
+      raise exception 'Security Error: Total earnings cannot be manually adjusted.' using errcode = '42501';
     end if;
   end if;
   return NEW;
@@ -648,6 +648,134 @@ revoke execute on function public.bootstrap_initial_admin(text) from public;
 revoke execute on function public.bootstrap_initial_admin(text) from anon;
 revoke execute on function public.bootstrap_initial_admin(text) from authenticated;
 grant execute on function public.bootstrap_initial_admin(text) to postgres, service_role;
+
+-- 4.6 Atomic Payment Receipt Confirmation RPC
+create or replace function public.confirm_payment_receipt(
+  p_payment_id uuid,
+  p_notes text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_caller_id uuid;
+  v_caller_role public.user_role;
+  v_caller_name text;
+  v_payment record;
+  v_new_total_paise bigint;
+  v_new_completed_count int;
+  v_now timestamp with time zone;
+begin
+  v_now := timezone('utc'::text, now());
+
+  -- 1. Identity & Session verification: Never trust client-supplied identity
+  v_caller_id := auth.uid();
+  if v_caller_id is null then
+    raise exception 'Unauthenticated: Valid session required to confirm payment receipt' using errcode = '42501';
+  end if;
+
+  -- 2. Verify caller profile and active status
+  select role, name into v_caller_role, v_caller_name
+  from public.profiles
+  where id = v_caller_id and is_suspended = false;
+
+  if not found then
+    raise exception 'Unauthorized: Caller profile not found or account suspended' using errcode = '42501';
+  end if;
+
+  -- 3. Row-level locking on payment record to prevent concurrent double-credit
+  select * into v_payment
+  from public.project_payments
+  where id = p_payment_id
+  for update;
+
+  if not found then
+    raise exception 'Payment record % not found', p_payment_id using errcode = 'P0002';
+  end if;
+
+  -- 4. Authorization check: caller MUST be the assigned student creator
+  if v_payment.student_id <> v_caller_id then
+    raise exception 'Unauthorized: Caller % is not the assigned creator for payment %', v_caller_id, p_payment_id using errcode = '42501';
+  end if;
+
+  -- 5. Status validation & dispute gating
+  if v_payment.status = 'RECEIPT_CONFIRMED_BY_CREATOR' then
+    raise exception 'Payment % has already been confirmed', p_payment_id using errcode = '23514';
+  end if;
+
+  if v_payment.status = 'DISPUTED' then
+    raise exception 'Payment % is in dispute and cannot be confirmed until resolution', p_payment_id using errcode = '23514';
+  end if;
+
+  if v_payment.status <> 'REPORTED_BY_BUSINESS' then
+    raise exception 'Payment % cannot be confirmed in current status: %', p_payment_id, v_payment.status using errcode = '23514';
+  end if;
+
+  -- 6. Ensure student profile exists
+  if not exists (select 1 from public.student_profiles where user_id = v_caller_id) then
+    raise exception 'Student profile not found for creator %', v_caller_id using errcode = 'P0002';
+  end if;
+
+  -- 7. Authorize transaction-scoped stats update
+  perform set_config('app.payment_settlement_authorized', 'true', true);
+
+  -- 8. Apply atomic state transition on project_payments
+  update public.project_payments
+  set
+    status = 'RECEIPT_CONFIRMED_BY_CREATOR',
+    confirmed_by_creator_at = v_now,
+    creator_notes = coalesce(p_notes, creator_notes),
+    updated_at = v_now
+  where id = p_payment_id;
+
+  -- 9. Authoritative earnings & completed project count mutation
+  update public.student_profiles
+  set
+    total_earned_paise = total_earned_paise + v_payment.amount_paise,
+    completed_projects_count = completed_projects_count + 1
+  where user_id = v_caller_id
+  returning total_earned_paise, completed_projects_count into v_new_total_paise, v_new_completed_count;
+
+  -- 10. Write append-only audit trail
+  insert into public.audit_logs (
+    actor_user_id,
+    actor_name,
+    actor_role,
+    action,
+    target_type,
+    target_id,
+    details,
+    created_at
+  ) values (
+    v_caller_id,
+    v_caller_name,
+    v_caller_role,
+    'CONFIRMED_PAYMENT_RECEIPT',
+    'PAYMENT',
+    p_payment_id::text,
+    'Creator confirmed receipt of ' || (v_payment.amount_paise / 100)::text || ' INR (Project: ' || v_payment.project_id::text || ', UTR: ' || coalesce(v_payment.utr, 'N/A') || ')',
+    v_now
+  );
+
+  -- 11. Return minimal safe result
+  return jsonb_build_object(
+    'success', true,
+    'payment_id', p_payment_id,
+    'project_id', v_payment.project_id,
+    'status', 'RECEIPT_CONFIRMED_BY_CREATOR',
+    'confirmed_at', v_now,
+    'amount_paise', v_payment.amount_paise,
+    'amount_inr', (v_payment.amount_paise::numeric / 100.0),
+    'total_earned_inr', (v_new_total_paise::numeric / 100.0),
+    'completed_projects_count', v_new_completed_count
+  );
+end;
+$$;
+
+revoke all on function public.confirm_payment_receipt(uuid, text) from public;
+grant execute on function public.confirm_payment_receipt(uuid, text) to authenticated, service_role;
 
 -- ------------------------------------------------------------------------------
 -- 5. ROW LEVEL SECURITY (RLS) & IDEMPOTENT POLICIES
@@ -831,8 +959,14 @@ create policy "Business can create payment record" on public.project_payments
   for insert with check (business_id = auth.uid());
 
 drop policy if exists "Parties can report and confirm payment" on public.project_payments;
-create policy "Parties can report and confirm payment" on public.project_payments
-  for update using (business_id = auth.uid() or student_id = auth.uid() or public.is_admin());
+drop policy if exists "Business can report payment" on public.project_payments;
+create policy "Business can report payment" on public.project_payments
+  for update
+  using (business_id = auth.uid() or public.is_admin())
+  with check (
+    (business_id = auth.uid() and status in ('NOT_REPORTED', 'REPORTED_BY_BUSINESS')) or
+    public.is_admin()
+  );
 
 -- 5.11 Platform Commissions Policies
 drop policy if exists "Commission records viewable by business and admin" on public.platform_commissions;

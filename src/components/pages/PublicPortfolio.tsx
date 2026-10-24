@@ -897,7 +897,7 @@ export const PublicPortfolio: React.FC<Props> = ({
                     <span className="text-slate-300 dark:text-slate-700">·</span>
                     <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
                       <UserCheck className="w-3.5 h-3.5" />
-                      <span>Adult 18+ Verified Policy</span>
+                      <span>Platform Verified Creator</span>
                     </span>
                   </div>
                 </div>
@@ -1982,7 +1982,7 @@ export const PublicPortfolio: React.FC<Props> = ({
                 <div className="space-y-2.5 text-xs">
                   <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <span>Adult Age 18+ Confirmed</span>
+                    <span>Identity & Profile Confirmed</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />

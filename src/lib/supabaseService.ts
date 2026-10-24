@@ -421,6 +421,68 @@ class SupabaseService {
     }));
   }
 
+  // --- Project Payments & Settlements ---
+  public async getProjectPayment(projectId: string): Promise<PaymentRecord | null> {
+    const sb = this.getClient();
+    if (!sb) throw new Error('Supabase client not configured');
+    const { data, error } = await sb
+      .from('project_payments')
+      .select('*')
+      .eq('project_id', projectId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      projectId: data.project_id,
+      projectTitle: data.project_title,
+      businessId: data.business_id,
+      studentId: data.student_id,
+      amountINR: (data.amount_paise || 0) / 100,
+      status: data.status,
+      paymentMethod: data.payment_method,
+      transactionReferenceUTR: data.utr || undefined,
+      recordedByUserId: data.business_id,
+      recordedAt: data.reported_at || data.created_at,
+      confirmedAt: data.confirmed_by_creator_at || undefined,
+      confirmedByUserId: data.confirmed_by_creator_at ? data.student_id : undefined,
+      notes: data.business_notes || undefined,
+    };
+  }
+
+  public async confirmPaymentReceipt(paymentId: string, notes?: string): Promise<{
+    success: boolean;
+    paymentId: string;
+    projectId: string;
+    status: string;
+    confirmedAt: string;
+    amountINR: number;
+    totalEarnedINR: number;
+    completedProjectsCount: number;
+  }> {
+    const sb = this.getClient();
+    if (!sb) throw new Error('Supabase client not configured');
+
+    const { data, error } = await sb.rpc('confirm_payment_receipt', {
+      p_payment_id: paymentId,
+      p_notes: notes || null,
+    });
+
+    if (error) throw error;
+    return {
+      success: data.success,
+      paymentId: data.payment_id,
+      projectId: data.project_id,
+      status: data.status,
+      confirmedAt: data.confirmed_at,
+      amountINR: data.amount_inr,
+      totalEarnedINR: data.total_earned_inr,
+      completedProjectsCount: data.completed_projects_count,
+    };
+  }
+
   // --- Scope Change Requests ---
   public async getScopeChangeRequests(projectId?: string): Promise<ScopeChangeRequest[]> {
     const sb = this.getClient();
@@ -993,6 +1055,86 @@ class SupabaseService {
       };
     } catch {
       return () => {};
+    }
+  }
+
+  // --- Background Sync & Offline Mutation Push ---
+  public async submitApplication(payload: {
+    projectId: string;
+    projectTitle: string;
+    studentId: string;
+    studentName: string;
+    studentSkills?: string[];
+    pitchMessage: string;
+    portfolioSamples?: { title: string; url: string }[];
+    proposedDeliveryDays?: number;
+    status?: string;
+    createdAt?: string;
+  }): Promise<void> {
+    const sb = this.getClient();
+    if (!sb) throw new Error('Live Supabase backend is not configured.');
+    const { error } = await sb.from('applications').upsert(
+      {
+        project_id: payload.projectId,
+        project_title: payload.projectTitle,
+        student_id: payload.studentId,
+        student_name: payload.studentName,
+        student_skills: payload.studentSkills || [],
+        pitch_message: payload.pitchMessage,
+        portfolio_samples: payload.portfolioSamples || [],
+        proposed_delivery_days: payload.proposedDeliveryDays || 7,
+        status: payload.status || 'PENDING',
+        created_at: payload.createdAt || new Date().toISOString(),
+      },
+      { onConflict: 'project_id,student_id' }
+    );
+    if (error) throw error;
+  }
+
+  public async updateProjectStatus(projectId: string, status: string): Promise<void> {
+    const sb = this.getClient();
+    if (!sb) throw new Error('Live Supabase backend is not configured.');
+    const { error } = await sb
+      .from('projects')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+    if (error) throw error;
+  }
+
+  public async syncPendingMutation(mutation: {
+    type: string;
+    payload: Record<string, any>;
+  }): Promise<void> {
+    const sb = this.getClient();
+    if (!sb) throw new Error('Live Supabase backend is not configured.');
+
+    switch (mutation.type) {
+      case 'APPLICATION_SUBMIT':
+        await this.submitApplication(mutation.payload as any);
+        break;
+      case 'PROJECT_STATUS_UPDATE':
+        await this.updateProjectStatus(mutation.payload.projectId, mutation.payload.status);
+        break;
+      case 'PROFILE_UPDATE':
+        if (mutation.payload.role === 'STUDENT') {
+          await this.updateStudentProfile(mutation.payload.userId, mutation.payload.data);
+        } else if (mutation.payload.role === 'BUSINESS') {
+          await this.updateBusinessProfile(mutation.payload.userId, mutation.payload.data);
+        }
+        break;
+      case 'SUBMISSION_CREATE':
+        const { error } = await sb.from('project_submissions').upsert({
+          id: mutation.payload.id,
+          project_id: mutation.payload.projectId,
+          student_id: mutation.payload.studentId,
+          notes: mutation.payload.notes,
+          live_link: mutation.payload.liveLink,
+          created_at: mutation.payload.createdAt || new Date().toISOString(),
+        });
+        if (error) throw error;
+        break;
+      default:
+        console.warn(`[SupabaseService] Unknown mutation type: ${mutation.type}`);
     }
   }
 

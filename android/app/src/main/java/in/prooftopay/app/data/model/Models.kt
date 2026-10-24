@@ -46,7 +46,10 @@ enum class ApplicationStatus {
 enum class PaymentStatus {
     @SerialName("NOT_INITIATED") NOT_INITIATED,
     @SerialName("PENDING") PENDING,
-    @SerialName("PAID") PAID,
+    @SerialName("REPORTED_BY_BUSINESS") REPORTED_BY_BUSINESS,
+    @SerialName("RECEIPT_CONFIRMED_BY_CREATOR") RECEIPT_CONFIRMED_BY_CREATOR,
+    @SerialName("PAID") PAID, // Retained for backward compatibility
+    @SerialName("DISPUTED") DISPUTED,
     @SerialName("FAILED") FAILED,
     @SerialName("REFUNDED") REFUNDED
 }
@@ -188,7 +191,10 @@ data class PaymentRecord(
     @SerialName("payment_method") val paymentMethod: String = "UPI",
     @SerialName("transaction_reference_utr") val transactionReferenceUtr: String? = null,
     val notes: String? = null,
-    @SerialName("recorded_at") val recordedAt: String? = null
+    @SerialName("recorded_at") val recordedAt: String? = null,
+    @SerialName("confirmed_at") val confirmedAt: String? = null,
+    @SerialName("confirmed_by_id") val confirmedById: String? = null,
+    @SerialName("dispute_reason") val disputeReason: String? = null
 )
 
 @Serializable
@@ -231,7 +237,15 @@ data class StudentProfile(
     @SerialName("total_earned_inr") val totalEarnedInr: Double = 0.0,
     @SerialName("completed_projects_count") val completedProjectsCount: Int = 0,
     @SerialName("average_rating") val averageRating: Double = 5.0,
-    @SerialName("verified_portfolio_slug") val verifiedPortfolioSlug: String? = null
+    @SerialName("verified_portfolio_slug") val verifiedPortfolioSlug: String? = null,
+    @SerialName("verification_status") val verificationStatus: VerificationStatus = VerificationStatus.UNVERIFIED,
+    @SerialName("verification_doc_type") val verificationDocType: String? = null,
+    @SerialName("verification_doc_number") val verificationDocNumber: String? = null,
+    @SerialName("college_email") val collegeEmail: String? = null,
+    @SerialName("student_id_card_url") val studentIdCardUrl: String? = null,
+    @SerialName("verification_submitted_at") val verificationSubmittedAt: String? = null,
+    @SerialName("verified_at") val verifiedAt: String? = null,
+    @SerialName("verification_admin_notes") val verificationAdminNotes: String? = null
 )
 
 @Serializable
@@ -560,3 +574,23 @@ data class DbSendChatMessageResult(
     @SerialName("updated_at") val updatedAt: String,
     val attachments: List<DbRpcAttachmentResult> = emptyList()
 )
+
+@Serializable
+data class DbConfirmPaymentParams(
+    @SerialName("p_payment_id") val paymentId: String,
+    @SerialName("p_notes") val notes: String? = null
+)
+
+@Serializable
+data class DbConfirmPaymentResult(
+    val success: Boolean,
+    @SerialName("payment_id") val paymentId: String,
+    @SerialName("project_id") val projectId: String,
+    val status: String,
+    @SerialName("confirmed_at") val confirmedAt: String? = null,
+    @SerialName("amount_paise") val amountPaise: Long,
+    @SerialName("amount_inr") val amountInr: Double,
+    @SerialName("total_earned_inr") val totalEarnedInr: Double,
+    @SerialName("completed_projects_count") val completedProjectsCount: Int
+)
+

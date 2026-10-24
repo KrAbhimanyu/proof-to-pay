@@ -990,7 +990,7 @@ fun EarningsScreen(
                         Text("Marketing Landing Page", fontWeight = FontWeight.Bold)
                         Text("₹15,000 INR", fontWeight = FontWeight.Black, color = Emerald600)
                     }
-                    Text("Status: PAID · UTR: UTR-HDFC-992182049182", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text("Status: RECEIPT CONFIRMED · UTR: UTR-HDFC-992182049182", style = MaterialTheme.typography.labelSmall, color = Emerald600)
                 }
             }
 
@@ -1007,7 +1007,7 @@ fun EarningsScreen(
                         Text("Herbal Tea Brand Identity", fontWeight = FontWeight.Bold)
                         Text("₹25,000 INR", fontWeight = FontWeight.Black, color = Emerald600)
                     }
-                    Text("Status: PAID · UTR: UTR-ICICI-884719203810", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text("Status: RECEIPT CONFIRMED · UTR: UTR-ICICI-884719203810", style = MaterialTheme.typography.labelSmall, color = Emerald600)
                 }
             }
         }
@@ -1122,6 +1122,22 @@ fun CreatorSettingsScreen(
                     Text("Email: ${currentUser.email}", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
                     Text("Age Policy: 18+ Adult Verified", style = MaterialTheme.typography.bodyMedium, color = Emerald600)
                     Text("College: ${studentProfile.college}", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = when (studentProfile.verificationStatus) {
+                            VerificationStatus.VERIFIED -> "Verification Status: Verified Creator (${studentProfile.verificationDocType ?: "Student ID"})"
+                            VerificationStatus.PENDING -> "Verification Status: Under Review"
+                            VerificationStatus.REJECTED -> "Verification Status: Verification Rejected"
+                            VerificationStatus.UNVERIFIED -> "Verification Status: Unverified"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = when (studentProfile.verificationStatus) {
+                            VerificationStatus.VERIFIED -> Emerald600
+                            VerificationStatus.PENDING -> Amber500
+                            VerificationStatus.REJECTED -> Rose600
+                            VerificationStatus.UNVERIFIED -> TextSecondary
+                        }
+                    )
                 }
             }
 

@@ -55,7 +55,12 @@ object AuthRepository {
             totalEarnedInr = 43000.0,
             completedProjectsCount = 3,
             averageRating = 5.0,
-            verifiedPortfolioSlug = "aarav-sharma"
+            verifiedPortfolioSlug = "aarav-sharma",
+            verificationStatus = VerificationStatus.VERIFIED,
+            verificationDocType = "COLLEGE_STUDENT_ID",
+            verificationDocNumber = "DTU-2023-CS-0492",
+            collegeEmail = "aarav.sharma@dtu.ac.in",
+            verifiedAt = "2026-09-15T10:00:00Z"
         )
     )
     val studentProfile: StateFlow<StudentProfile> = _studentProfile.asStateFlow()
@@ -229,6 +234,40 @@ object AuthRepository {
             verificationDocNumber = docNumber
         )
         AuditRepository.log(_businessProfile.value.userId, _businessProfile.value.companyName, "VERIFICATION_SUBMITTED", "Submitted $docType $docNumber")
+    }
+
+    fun submitStudentVerification(docType: String, docNumber: String, collegeEmail: String? = null): Result<StudentProfile> {
+        if (docType.isBlank() || docNumber.isBlank()) {
+            return Result.failure(IllegalArgumentException("Document type and document number are required"))
+        }
+        val updated = _studentProfile.value.copy(
+            verificationStatus = VerificationStatus.PENDING,
+            verificationDocType = docType.trim(),
+            verificationDocNumber = docNumber.trim(),
+            collegeEmail = collegeEmail?.trim(),
+            verificationSubmittedAt = "2026-10-24T19:00:00Z"
+        )
+        _studentProfile.value = updated
+        AuditRepository.log(_studentProfile.value.userId, "Student", "STUDENT_VERIFICATION_SUBMITTED", "Submitted student verification ($docType: $docNumber)")
+        return Result.success(updated)
+    }
+
+    fun updateStudentEarnings(studentId: String, amountInr: Double) {
+        if (_studentProfile.value.userId == studentId) {
+            _studentProfile.value = _studentProfile.value.copy(
+                totalEarnedInr = _studentProfile.value.totalEarnedInr + amountInr,
+                completedProjectsCount = _studentProfile.value.completedProjectsCount + 1
+            )
+        }
+    }
+
+    fun setStudentStats(studentId: String, totalEarnedInr: Double, completedCount: Int) {
+        if (_studentProfile.value.userId == studentId) {
+            _studentProfile.value = _studentProfile.value.copy(
+                totalEarnedInr = totalEarnedInr,
+                completedProjectsCount = completedCount
+            )
+        }
     }
 
     fun switchUser(user: UserProfile) {
@@ -508,10 +547,12 @@ object PaymentRepository {
             businessId = "business-1",
             studentId = "student-1",
             amountInr = 15000.0,
-            status = PaymentStatus.PAID,
+            status = PaymentStatus.RECEIPT_CONFIRMED_BY_CREATOR,
             paymentMethod = "UPI",
             transactionReferenceUtr = "UTR-HDFC-992182049182",
-            notes = "Cleared immediately on GitHub PR approval"
+            notes = "Cleared immediately on GitHub PR approval",
+            confirmedAt = "2026-10-10T12:00:00Z",
+            confirmedById = "student-1"
         )
     ))
 
@@ -526,8 +567,9 @@ object PaymentRepository {
         utr: String,
         method: String = "UPI"
     ): Result<PaymentRecord> {
-        if (utr.isBlank()) {
-            return Result.failure(IllegalArgumentException("Valid bank transaction reference (UTR) is required for audit traceability"))
+        val trimmedUtr = utr.trim()
+        if (trimmedUtr.length < 4) {
+            return Result.failure(IllegalArgumentException("Valid bank transaction reference (UTR) of at least 4 characters is required"))
         }
         val record = PaymentRecord(
             id = "pay-${System.currentTimeMillis()}",
@@ -536,13 +578,105 @@ object PaymentRepository {
             businessId = businessId,
             studentId = studentId,
             amountInr = amountInr,
-            status = PaymentStatus.PAID,
+            status = PaymentStatus.REPORTED_BY_BUSINESS,
             paymentMethod = method,
-            transactionReferenceUtr = utr
+            transactionReferenceUtr = trimmedUtr,
+            recordedAt = "2026-10-24T19:00:00Z"
         )
         _payments.value = listOf(record) + _payments.value
-        AuditRepository.log(businessId, "Business", "PAYMENT_RECORDED", "Recorded ₹$amountInr INR paid to $studentId (UTR: $utr)")
+        AuditRepository.log(businessId, "Business", "PAYMENT_REPORTED", "Reported ₹$amountInr INR paid to $studentId (UTR: $trimmedUtr). Awaiting creator receipt confirmation.")
         return Result.success(record)
+    }
+
+    fun confirmReceipt(paymentId: String, studentId: String): Result<PaymentRecord> {
+        val payment = _payments.value.find { it.id == paymentId }
+            ?: return Result.failure(NoSuchElementException("Payment record not found"))
+
+        if (payment.studentId != studentId) {
+            return Result.failure(IllegalStateException("Unauthorized: Only the assigned creator can confirm receipt"))
+        }
+        if (payment.status != PaymentStatus.REPORTED_BY_BUSINESS) {
+            return Result.failure(IllegalStateException("Payment cannot be confirmed in current status: ${payment.status}"))
+        }
+
+        val updatedRecord = payment.copy(
+            status = PaymentStatus.RECEIPT_CONFIRMED_BY_CREATOR,
+            confirmedAt = "2026-10-24T19:00:00Z",
+            confirmedById = studentId
+        )
+
+        _payments.value = _payments.value.map { if (it.id == paymentId) updatedRecord else it }
+        // Authoritative balance & completed projects count update only upon creator receipt confirmation
+        AuthRepository.updateStudentEarnings(studentId, payment.amountInr)
+        AuditRepository.log(studentId, "Creator", "PAYMENT_RECEIPT_CONFIRMED", "Creator confirmed receipt of ₹${payment.amountInr} INR for project ${payment.projectId}")
+        return Result.success(updatedRecord)
+    }
+
+    suspend fun confirmReceiptRemote(paymentId: String, studentId: String, notes: String? = null): Result<PaymentRecord> {
+        if (SupabaseClientProvider.isConfigured) {
+            return try {
+                val rpcResult = SupabaseClientProvider.postgrest.rpc(
+                    function = "confirm_payment_receipt",
+                    parameters = DbConfirmPaymentParams(paymentId = paymentId, notes = notes)
+                ).decodeAs<DbConfirmPaymentResult>()
+
+                val now = rpcResult.confirmedAt ?: java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                val payment = _payments.value.find { it.id == paymentId }
+                val updatedRecord = payment?.copy(
+                    status = PaymentStatus.RECEIPT_CONFIRMED_BY_CREATOR,
+                    confirmedAt = now,
+                    confirmedById = studentId
+                ) ?: PaymentRecord(
+                    id = paymentId,
+                    projectId = rpcResult.projectId,
+                    projectTitle = "Project Settlement",
+                    businessId = "business",
+                    studentId = studentId,
+                    amountInr = rpcResult.amountInr,
+                    status = PaymentStatus.RECEIPT_CONFIRMED_BY_CREATOR,
+                    confirmedAt = now,
+                    confirmedById = studentId
+                )
+
+                _payments.value = _payments.value.map { if (it.id == paymentId) updatedRecord else it }
+                AuthRepository.setStudentStats(studentId, rpcResult.totalEarnedInr, rpcResult.completedProjectsCount)
+                AuditRepository.log(studentId, "Creator", "PAYMENT_RECEIPT_CONFIRMED", "Creator confirmed receipt of ₹${rpcResult.amountInr} INR for project ${rpcResult.projectId} via backend RPC")
+                Result.success(updatedRecord)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        } else {
+            return confirmReceipt(paymentId, studentId)
+        }
+    }
+
+    fun disputePayment(paymentId: String, studentId: String, reason: String): Result<PaymentRecord> {
+        val payment = _payments.value.find { it.id == paymentId }
+            ?: return Result.failure(NoSuchElementException("Payment record not found"))
+
+        if (payment.studentId != studentId) {
+            return Result.failure(IllegalStateException("Unauthorized: Only the assigned creator can dispute this payment"))
+        }
+
+        val updatedRecord = payment.copy(
+            status = PaymentStatus.DISPUTED,
+            disputeReason = reason
+        )
+        _payments.value = _payments.value.map { if (it.id == paymentId) updatedRecord else it }
+
+        DisputeRepository.addDispute(
+            DisputeRecord(
+                id = "disp-${System.currentTimeMillis()}",
+                projectId = payment.projectId,
+                projectTitle = payment.projectTitle,
+                raisedById = studentId,
+                raisedByName = "Student Creator",
+                reason = "Payment Disputed: $reason (Reported UTR: ${payment.transactionReferenceUtr})",
+                status = "OPEN"
+            )
+        )
+        AuditRepository.log(studentId, "Creator", "PAYMENT_DISPUTED", "Disputed payment $paymentId: $reason")
+        return Result.success(updatedRecord)
     }
 }
 
@@ -581,6 +715,10 @@ object DisputeRepository {
     ))
 
     val disputes: StateFlow<List<DisputeRecord>> = _disputes.asStateFlow()
+
+    fun addDispute(dispute: DisputeRecord) {
+        _disputes.value = listOf(dispute) + _disputes.value
+    }
 
     fun resolveDispute(disputeId: String, resolutionNotes: String) {
         _disputes.value = _disputes.value.map {

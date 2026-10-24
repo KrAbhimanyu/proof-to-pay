@@ -20,7 +20,7 @@ export const HowItWorks: React.FC<Props> = ({ onNavigate, onOpenAuth }) => {
     { num: '01', title: 'Business Verification', desc: 'Businesses register and submit GSTIN, CIN, PAN, or MSME documentation. Admin reviews and approves.' },
     { num: '02', title: 'Clear Project Scoping', desc: 'Business posts a listing with fixed budget in INR, required skills, deliverables, acceptance criteria, and revision limits.' },
     { num: '03', title: 'Listing Moderation', desc: 'Admin verifies the project adheres to safety rules and fair compensation before public visibility.' },
-    { num: '04', title: 'Student Application', desc: 'Eligible adult students (18+) apply with their pitch and verified portfolio links. No unpaid spec work.' },
+    { num: '04', title: 'Student Application', desc: 'Eligible creators and students apply with their pitch and verified portfolio links. No unpaid spec work.' },
     { num: '05', title: 'Binding Offer Extended', desc: 'Business selects a student and issues a formal offer with locked scope and frozen budget terms.' },
     { num: '06', title: 'Offer Acceptance', desc: 'Student accepts the terms. Project becomes active, and neither party can unilaterally alter scope.' },
     { num: '07', title: 'Milestone Delivery', desc: 'Student submits deliverables and source files for client review.' },
@@ -71,9 +71,9 @@ export const HowItWorks: React.FC<Props> = ({ onNavigate, onOpenAuth }) => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
           <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
             <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            <h4 className="font-bold text-sm text-slate-900 dark:text-white">Adult Participation (18+)</h4>
+            <h4 className="font-bold text-sm text-slate-900 dark:text-white">Creator Milestone Security</h4>
             <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              To enter legally binding project contracts and comply with Indian contract law, students must confirm they are at least 18 years old upon registration.
+              Every project operates with clear deliverable milestones, agreed timelines, and locked scope protection to guarantee student and creator safety.
             </p>
           </div>
 

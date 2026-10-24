@@ -51,7 +51,7 @@ export const PilotChecklist: React.FC<Props> = ({
 
   // Real-time step status calculations
   // 1. Registration & Verification
-  const step1CreatorDone = !!studentProfile && studentProfile.age >= 18 && studentProfile.skills.length > 0;
+  const step1CreatorDone = !!studentProfile && studentProfile.skills.length > 0;
   const step1BusinessDone = !!businessProfile && businessProfile.verificationStatus === 'VERIFIED';
   const step1Completed = currentUser?.role === 'STUDENT' ? step1CreatorDone : (currentUser?.role === 'BUSINESS' ? step1BusinessDone : (step1CreatorDone || step1BusinessDone));
 
@@ -89,7 +89,7 @@ export const PilotChecklist: React.FC<Props> = ({
       id: 1,
       title: 'Registration & Identity Verification',
       roles: ['CREATOR', 'BUSINESS'],
-      description: 'Create an account and complete required verification. Creators verify 18+ adult compliance and showcase skills; businesses register entity proof (GSTIN/CIN/PAN).',
+      description: 'Create an account and complete required verification. Creators showcase skills and build verified portfolios; businesses register entity proof (GSTIN/CIN/PAN).',
       isCompleted: step1Completed,
       statusLabel: step1Completed ? 'Verified & Complete' : (currentUser ? 'Profile In Progress' : 'Sign In Required'),
       actionLabel: currentUser?.role === 'STUDENT' ? 'View Creator Profile' : (currentUser?.role === 'BUSINESS' ? 'View Business Verification' : 'Get Started'),
@@ -99,7 +99,7 @@ export const PilotChecklist: React.FC<Props> = ({
         else if (currentUser.role === 'BUSINESS') onNavigate('business_dashboard');
         else onNavigate('admin_dashboard');
       },
-      tips: 'Proof-to-Pay enforces strict adult age verification (18+) to ensure legally enforceable micro-contracts.'
+      tips: 'Proof-to-Pay verifies identity and active profiles to ensure high quality micro-contracts.'
     },
     {
       id: 2,
@@ -204,7 +204,7 @@ export const PilotChecklist: React.FC<Props> = ({
             Proof-to-Pay End-to-End Pilot Journey
           </h1>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-            Follow our 7-step guided workflow to test the entire marketplace lifecycle: from 18+ creator onboarding and micro-project creation to transparent 5% commission calculation, deliverable submission, and audited settlement.
+            Follow our 7-step guided workflow to test the entire marketplace lifecycle: from creator onboarding and micro-project creation to transparent 5% commission calculation, deliverable submission, and audited settlement.
           </p>
 
           <div className="pt-2 flex flex-wrap items-center gap-4 text-xs">

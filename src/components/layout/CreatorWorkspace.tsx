@@ -264,7 +264,7 @@ export const CreatorWorkspace: React.FC<Props> = ({
             <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-700/60 text-[10px]">
               <span className="inline-flex items-center gap-1 font-bold text-emerald-700 dark:text-emerald-400">
                 <ShieldCheck className="w-3 h-3" />
-                <span>18+ Verified Creator</span>
+                <span>Verified Creator</span>
               </span>
               <span className="font-mono text-slate-500">
                 ₹{(profile.totalEarnedINR || 0).toLocaleString('en-IN')}

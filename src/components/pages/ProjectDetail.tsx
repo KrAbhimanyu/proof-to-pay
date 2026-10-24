@@ -92,8 +92,18 @@ export const ProjectDetail: React.FC<Props> = ({
       return;
     }
 
-    if (studentProfile && studentProfile.age < 18) {
-      setErrorMsg('Participation is restricted to adults aged 18 or older under platform policy.');
+    if (project.businessId === currentUser.id) {
+      setErrorMsg('You are the client who posted this project. You cannot apply to your own listing.');
+      return;
+    }
+
+    if (existingApp) {
+      setErrorMsg('You have already submitted an application for this project.');
+      return;
+    }
+
+    if (project.status !== 'APPROVED') {
+      setErrorMsg('This project is currently not accepting new applications.');
       return;
     }
 
@@ -126,6 +136,47 @@ export const ProjectDetail: React.FC<Props> = ({
       setIsSubmitting(false);
     }
   };
+
+  if (!currentUser) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12 text-center space-y-6">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          <span>Back to Projects</span>
+        </button>
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200 dark:border-slate-800 shadow-xl space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mx-auto">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+              Authentication Required to Access Projects
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-lg mx-auto">
+              Under Proof-to-Pay security rules, full project briefs, deliverable specifications, budget milestones, and application submission are reserved for authenticated members.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <button
+              onClick={() => onOpenAuth('login')}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition"
+            >
+              Sign In to View Project
+            </button>
+            <button
+              onClick={() => onOpenAuth('register_student')}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-xs transition"
+            >
+              Create Creator Account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
@@ -355,6 +406,23 @@ export const ProjectDetail: React.FC<Props> = ({
                 </button>
               )}
             </div>
+          ) : project.status !== 'APPROVED' ? (
+            /* Project Closed / In Progress / Completed */
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 space-y-4">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center">
+                <Lock className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">Applications Closed</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                This project is currently <span className="font-bold uppercase text-indigo-600">{project.status.replace('_', ' ')}</span>. The client has already selected a creator or completed this project.
+              </p>
+              <button
+                onClick={onBack}
+                className="w-full py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              >
+                Browse Other Available Projects
+              </button>
+            </div>
           ) : (
             /* Application Form */
             <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
@@ -489,9 +557,9 @@ export const ProjectDetail: React.FC<Props> = ({
                   ))}
                 </div>
 
-                {/* Adult 18+ policy notice */}
+                {/* Platform terms notice */}
                 <div className="text-[11px] text-slate-500 leading-tight">
-                  By applying, you confirm you are 18 years or older and accept Proof-to-Pay terms for verified project completion.
+                  By applying, you accept Proof-to-Pay terms for verified project completion and direct milestone settlement.
                 </div>
 
                 {/* Submit button */}

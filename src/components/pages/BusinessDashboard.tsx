@@ -18,6 +18,7 @@ import { ScopeLockModal } from '../common/ScopeLockModal';
 import { ScopeChangeModal } from '../common/ScopeChangeModal';
 import { WorkTrail } from '../common/WorkTrail';
 import { ProjectPerformanceWidget } from '../common/ProjectPerformanceWidget';
+import { WorkflowJourneyTracker } from '../common/WorkflowJourneyTracker';
 import confetti from 'canvas-confetti';
 import {
   Building2,
@@ -531,6 +532,20 @@ export const BusinessDashboard: React.FC<Props> = ({
       {/* Tab 1: Overview */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* End-to-End 10-Stage Workflow Journey Tracker */}
+          <WorkflowJourneyTracker
+            currentUser={currentUser}
+            onNavigate={(view, tab) => {
+              if (view === 'business_dashboard' && tab) {
+                setActiveTab(tab);
+              } else {
+                onNavigate(view, tab);
+              }
+            }}
+            onOpenVerificationModal={() => setActiveTab('verification')}
+            onOpenPostProjectModal={() => setActiveTab('create_project')}
+          />
+
           {profile.verificationStatus !== 'VERIFIED' && (
             <div className="p-5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -1056,30 +1071,57 @@ export const BusinessDashboard: React.FC<Props> = ({
                     <div className="text-xs text-slate-400 italic">Waiting for student to submit Version 1 deliverables.</div>
                   )}
 
-                  {/* Completed Review Action */}
-                  {proj.status === 'COMPLETED' && (
-                    <div className="pt-2 flex items-center justify-between">
-                      <button
-                        onClick={() => {
-                          setReviewProjectId(proj.id);
-                          setReviewDeliverableSummary(`Delivered ${proj.title}`);
-                        }}
-                        className="px-4 py-2 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-xs font-semibold hover:opacity-90 transition flex items-center gap-1.5"
-                      >
-                        <Star className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Leave Verified Student Review</span>
-                      </button>
+                  {/* Completed Review & Payment Action */}
+                  {proj.status === 'COMPLETED' && (() => {
+                    const myReview = allReviews.find((r) => r.projectId === proj.id && r.reviewerId === currentUser.id);
+                    const creatorReview = allReviews.find((r) => r.projectId === proj.id && r.reviewerId !== currentUser.id);
 
-                      <button
-                        onClick={() => {
-                          setPaymentProjectId(proj.id);
-                        }}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition"
-                      >
-                        Record / Verify Payment UTR
-                      </button>
-                    </div>
-                  )}
+                    return (
+                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          {myReview ? (
+                            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-xs space-y-1 flex-1">
+                              <div className="flex items-center gap-1.5 font-bold text-emerald-900 dark:text-emerald-300">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <span>Verified Review Submitted to Creator</span>
+                                <span className="text-amber-500 ml-1">★ {myReview.rating}/5</span>
+                              </div>
+                              <p className="text-slate-600 dark:text-slate-300 italic">"{myReview.comment}"</p>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setReviewProjectId(proj.id);
+                                setReviewDeliverableSummary(`Delivered ${proj.title}`);
+                              }}
+                              className="px-4 py-2.5 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-xs font-semibold hover:opacity-90 transition flex items-center gap-1.5 shadow-xs"
+                            >
+                              <Star className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Leave Verified Student Review</span>
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => {
+                              setPaymentProjectId(proj.id);
+                            }}
+                            className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition shrink-0 shadow-xs"
+                          >
+                            Record / Verify Payment UTR
+                          </button>
+                        </div>
+
+                        {creatorReview && (
+                          <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-xl text-xs space-y-0.5">
+                            <span className="font-bold text-indigo-950 dark:text-indigo-200">
+                              Creator Feedback from {proj.selectedStudentName}: ★ {creatorReview.rating}/5
+                            </span>
+                            <p className="text-slate-600 dark:text-slate-300 italic">"{creatorReview.comment}"</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

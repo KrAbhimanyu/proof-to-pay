@@ -4,7 +4,7 @@ export const StudentRegistrationSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Valid email is required'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  age: z.coerce.number().min(18, 'You must be at least 18 years old to join Proof-to-Pay'),
+  age: z.coerce.number().min(1, 'Please enter a valid age').optional(),
   city: z.string().min(2, 'City is required'),
   college: z.string().optional(),
   degree: z.string().optional(),

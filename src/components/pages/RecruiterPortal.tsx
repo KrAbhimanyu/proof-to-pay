@@ -228,7 +228,7 @@ export const RecruiterPortal: React.FC<Props> = ({
     const candidateSummaries = col.items.map((item) => {
       const c = creators.find((cr) => cr.user.id === item.creatorId);
       if (!c) return '';
-      return `• ${c.user.name} (${c.profile.headline}) | Skills: ${c.profile.skills.join(', ')} | Verified Earned: ₹${c.profile.totalEarnedINR} | Rating: ${c.profile.averageRating}★ | Portfolio: https://prooftopay.in/portfolio/${c.profile.verifiedPortfolioSlug}${item.privateNotes ? `\n  Recruiter Notes: ${item.privateNotes}` : ''}`;
+      return `• ${c.user.name} (${c.profile.headline}) | Skills: ${c.profile.skills.join(', ')} | Rating: ${c.profile.averageRating}★ | Projects: ${c.profile.completedProjectsCount} | Portfolio: https://prooftopay.in/portfolio/${c.profile.verifiedPortfolioSlug}${item.privateNotes ? `\n  Recruiter Notes: ${item.privateNotes}` : ''}`;
     }).filter(Boolean).join('\n\n');
 
     const fullExport = `PROOF-TO-PAY TALENT COLLECTION: ${col.name}\nDescription: ${col.description}\nTotal Candidates: ${col.items.length}\nCreated: ${new Date(col.createdAt).toLocaleDateString()}\n\nCANDIDATES:\n${candidateSummaries}`;
@@ -537,14 +537,8 @@ export const RecruiterPortal: React.FC<Props> = ({
                       </div>
                     </div>
 
-                    {/* Verified Telemetry Highlights */}
-                    <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-xs">
-                      <div>
-                        <div className="text-[10px] text-slate-400 font-medium">Verified Earned</div>
-                        <div className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">
-                          ₹{profile.totalEarnedINR.toLocaleString('en-IN')}
-                        </div>
-                      </div>
+                    {/* Telemetry Highlights */}
+                    <div className="grid grid-cols-2 gap-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-xs">
                       <div>
                         <div className="text-[10px] text-slate-400 font-medium">Delivery Rate</div>
                         <div className="font-bold text-slate-900 dark:text-white text-sm">

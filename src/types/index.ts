@@ -52,7 +52,7 @@ export interface StudentProfile {
   userId: string;
   headline: string;
   bio: string;
-  age: number; // Must be 18+
+  age?: number;
   college?: string;
   degree?: string;
   graduationYear?: number;
@@ -71,6 +71,17 @@ export interface StudentProfile {
   githubUrl?: string | null;
   linkedinUrl?: string | null;
   behanceUrl?: string | null;
+  connections?: { id: string; name: string; role?: string; profileUrl?: string; platform?: string; addedAt: string }[];
+  verificationStatus?: VerificationStatus;
+  verificationDetails?: {
+    documentType: string;
+    documentNumber: string;
+    submittedAt: string;
+    studentIdCardUrl?: string;
+    collegeEmail?: string;
+    verifiedAt?: string;
+    adminNotes?: string;
+  };
 }
 
 export type BadgeTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';

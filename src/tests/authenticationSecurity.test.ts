@@ -22,22 +22,19 @@ describe('PROOF-TO-PAY: Authentication & Session Security Suite', () => {
   });
 
   describe('1. Registration Security & Validation', () => {
-    it('enforces age 18+ requirement on Creator registration schema', () => {
-      const underAgeResult = StudentRegistrationSchema.safeParse({
+    it('validates Creator registration schema without age restriction', () => {
+      const creatorResult = StudentRegistrationSchema.safeParse({
         name: 'Young Creator',
-        email: 'minor@example.com',
+        email: 'creator@example.com',
         password: 'password123',
-        age: 17, // Under 18
+        age: 17, // Previously restricted, now allowed
         city: 'Mumbai',
         headline: 'Aspiring Web Designer',
         skills: ['Figma'],
         experienceLevel: 'BEGINNER',
       });
 
-      expect(underAgeResult.success).toBe(false);
-      if (!underAgeResult.success) {
-        expect(underAgeResult.error.issues[0]?.message).toMatch(/18 years old/i);
-      }
+      expect(creatorResult.success).toBe(true);
 
       const validAdultResult = StudentRegistrationSchema.safeParse({
         name: 'Adult Creator',

@@ -101,6 +101,9 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLog
   const [newCommissionRate, setNewCommissionRate] = useState<number>(monetizationConfig.defaultCommissionRatePercent);
   const [configSuccessMsg, setConfigSuccessMsg] = useState<string | null>(null);
 
+  // Verifications state
+  const [verificationSubTab, setVerificationSubTab] = useState<'business' | 'student'>('business');
+
   // Businesses needing verification
   const businessProfiles = users
     .filter((u) => u.role === 'BUSINESS')
@@ -109,6 +112,16 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLog
 
   const pendingVerifications = businessProfiles.filter(
     (bp) => bp.profile?.verificationStatus === 'PENDING'
+  );
+
+  // Student creators needing verification
+  const studentProfilesList = users
+    .filter((u) => u.role === 'STUDENT')
+    .map((u) => ({ user: u, profile: marketplaceStore.getStudentProfile(u.id) }))
+    .filter((sp) => sp.profile !== null);
+
+  const pendingStudentVerifications = studentProfilesList.filter(
+    (sp) => sp.profile?.verificationStatus === 'PENDING'
   );
 
   // Projects needing moderation
@@ -291,6 +304,17 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLog
     const notes = prompt(`Administrative notes for ${approved ? 'approval' : 'rejection'}:`, approved ? 'Government registry documents verified.' : 'Discrepancy in registration records.');
     if (notes !== null) {
       marketplaceStore.adminVerifyBusiness(currentUser, businessId, approved, notes);
+      window.location.reload();
+    }
+  };
+
+  const handleVerifyStudent = (studentId: string, approved: boolean) => {
+    const notes = prompt(
+      `Administrative notes for creator ${approved ? 'approval' : 'rejection'}:`,
+      approved ? 'Government student ID and institutional enrollment verified.' : 'Discrepancy in student identification records.'
+    );
+    if (notes !== null) {
+      marketplaceStore.adminVerifyStudent(currentUser, studentId, approved, notes);
       window.location.reload();
     }
   };
@@ -597,10 +621,10 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLog
             activeTab === 'verifications' ? 'border-purple-600 text-purple-600 dark:text-purple-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
         >
-          <span>Business Verification</span>
-          {pendingVerifications.length > 0 && (
+          <span>Verification Queue</span>
+          {(pendingVerifications.length + pendingStudentVerifications.length) > 0 && (
             <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] flex items-center justify-center font-bold">
-              {pendingVerifications.length}
+              {pendingVerifications.length + pendingStudentVerifications.length}
             </span>
           )}
         </button>
@@ -1827,58 +1851,209 @@ export const AdminDashboard: React.FC<Props> = ({ currentUser, onNavigate, onLog
 
       {/* Tab 2: Verifications */}
       {activeTab === 'verifications' && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-            Business Verification Requests ({pendingVerifications.length} Pending)
-          </h2>
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                Platform Verification Queue
+              </h2>
+              <p className="text-xs text-slate-500">
+                Audit government IDs, academic credentials, and institutional evidence before awarding verified status.
+              </p>
+            </div>
 
-          {businessProfiles.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-400">No businesses registered.</div>
-          ) : (
+            {/* Sub-tab Switcher */}
+            <div className="flex items-center gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl text-xs font-semibold">
+              <button
+                onClick={() => setVerificationSubTab('business')}
+                className={`px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                  verificationSubTab === 'business'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span>Business Entities</span>
+                {pendingVerifications.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                    {pendingVerifications.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setVerificationSubTab('student')}
+                className={`px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+                  verificationSubTab === 'student'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span>Student Creators</span>
+                {pendingStudentVerifications.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-900 text-[10px] font-bold">
+                    {pendingStudentVerifications.length}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Sub-tab 1: Business Verifications */}
+          {verificationSubTab === 'business' && (
             <div className="space-y-4">
-              {businessProfiles.map(({ user, profile }) => (
-                <div key={user.id} className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <h3 className="font-bold text-base text-slate-900 dark:text-white">{profile?.companyName}</h3>
-                      <div className="text-xs text-slate-500">Representative: {user.name} ({user.email}) · {profile?.city}</div>
-                    </div>
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase ${
-                      profile?.verificationStatus === 'VERIFIED' ? 'bg-emerald-100 text-emerald-800' :
-                      profile?.verificationStatus === 'PENDING' ? 'bg-amber-100 text-amber-800' :
-                      'bg-slate-100 text-slate-700'
-                    }`}>
-                      {profile?.verificationStatus}
-                    </span>
-                  </div>
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Corporate Registrations & Entity GSTIN / CIN ({pendingVerifications.length} Pending Review)
+              </div>
 
-                  {profile?.verificationDetails && (
-                    <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl text-xs space-y-1">
-                      <div><strong>Entity:</strong> {profile.verificationDetails.legalEntityName}</div>
-                      <div><strong>Doc Type:</strong> {profile.verificationDetails.documentType}</div>
-                      <div><strong>Govt ID:</strong> <code className="font-mono">{profile.verificationDetails.documentNumber}</code></div>
-                      {profile.verificationDetails.adminNotes && (
-                        <div className="text-slate-500 italic">Notes: {profile.verificationDetails.adminNotes}</div>
+              {businessProfiles.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400">No businesses registered.</div>
+              ) : (
+                <div className="space-y-4">
+                  {businessProfiles.map(({ user, profile }) => (
+                    <div key={user.id} className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <h3 className="font-bold text-base text-slate-900 dark:text-white">{profile?.companyName}</h3>
+                          <div className="text-xs text-slate-500">Representative: {user.name} ({user.email}) · {profile?.city}</div>
+                        </div>
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase ${
+                          profile?.verificationStatus === 'VERIFIED' ? 'bg-emerald-100 text-emerald-800' :
+                          profile?.verificationStatus === 'PENDING' ? 'bg-amber-100 text-amber-800' :
+                          'bg-slate-100 text-slate-700'
+                        }`}>
+                          {profile?.verificationStatus}
+                        </span>
+                      </div>
+
+                      {profile?.verificationDetails && (
+                        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl text-xs space-y-1">
+                          <div><strong>Entity:</strong> {profile.verificationDetails.legalEntityName}</div>
+                          <div><strong>Doc Type:</strong> {profile.verificationDetails.documentType}</div>
+                          <div><strong>Govt ID:</strong> <code className="font-mono">{profile.verificationDetails.documentNumber}</code></div>
+                          {profile.verificationDetails.adminNotes && (
+                            <div className="text-slate-500 italic">Notes: {profile.verificationDetails.adminNotes}</div>
+                          )}
+                        </div>
                       )}
-                    </div>
-                  )}
 
-                  <div className="pt-2 flex justify-end gap-2">
-                    <button
-                      onClick={() => handleVerifyBusiness(user.id, true)}
-                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition"
-                    >
-                      Approve & Verify
-                    </button>
-                    <button
-                      onClick={() => handleVerifyBusiness(user.id, false)}
-                      className="px-4 py-2 rounded-xl border border-slate-300 text-rose-600 font-semibold text-xs hover:bg-rose-50 transition"
-                    >
-                      Reject
-                    </button>
-                  </div>
+                      <div className="pt-2 flex justify-end gap-2">
+                        <button
+                          onClick={() => handleVerifyBusiness(user.id, true)}
+                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition"
+                        >
+                          Approve & Verify
+                        </button>
+                        <button
+                          onClick={() => handleVerifyBusiness(user.id, false)}
+                          className="px-4 py-2 rounded-xl border border-slate-300 text-rose-600 font-semibold text-xs hover:bg-rose-50 transition"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+            </div>
+          )}
+
+          {/* Sub-tab 2: Student Creator Verifications */}
+          {verificationSubTab === 'student' && (
+            <div className="space-y-4">
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Academic ID & Institutional Evidence ({pendingStudentVerifications.length} Pending Review)
+              </div>
+
+              {studentProfilesList.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400">No student profiles registered.</div>
+              ) : (
+                <div className="space-y-4">
+                  {studentProfilesList.map(({ user, profile }) => (
+                    <div key={user.id} className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-base text-slate-900 dark:text-white">{user.name}</h3>
+                            <span className="text-xs text-slate-400 font-mono">({user.email})</span>
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            <strong>{profile?.college || 'University'}</strong> · {profile?.degree || 'Degree'} ({profile?.graduationYear || '2026'}) · {user?.city || 'India'}
+                          </div>
+                          {profile?.skills && profile.skills.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pt-1">
+                              {profile.skills.slice(0, 4).map((s) => (
+                                <span key={s} className="px-2 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase ${
+                          profile?.verificationStatus === 'VERIFIED' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' :
+                          profile?.verificationStatus === 'PENDING' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' :
+                          profile?.verificationStatus === 'REJECTED' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300' :
+                          'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                        }`}>
+                          {profile?.verificationStatus || 'UNVERIFIED'}
+                        </span>
+                      </div>
+
+                      {profile?.verificationDetails ? (
+                        <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/40 rounded-xl text-xs space-y-1.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div><strong>Document Type:</strong> {profile.verificationDetails.documentType}</div>
+                            <div><strong>Roll / ID Number:</strong> <code className="font-mono bg-white dark:bg-slate-800 px-1 py-0.5 rounded">{profile.verificationDetails.documentNumber}</code></div>
+                            {profile.verificationDetails.collegeEmail && (
+                              <div><strong>College (.edu / .ac.in):</strong> {profile.verificationDetails.collegeEmail}</div>
+                            )}
+                            <div><strong>Submitted At:</strong> {new Date(profile.verificationDetails.submittedAt).toLocaleString()}</div>
+                          </div>
+                          {profile.verificationDetails.studentIdCardUrl && (
+                            <div className="pt-1">
+                              <strong>ID Document Scan / Link:</strong>{' '}
+                              <a
+                                href={profile.verificationDetails.studentIdCardUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-purple-600 dark:text-purple-400 font-semibold hover:underline inline-flex items-center gap-1"
+                              >
+                                <span>Inspect ID Document</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </div>
+                          )}
+                          {profile.verificationDetails.adminNotes && (
+                            <div className="text-slate-500 italic pt-1 border-t border-purple-100 dark:border-purple-900/40">
+                              Admin Notes: {profile.verificationDetails.adminNotes}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-400 italic">
+                          No verification documents submitted yet by this creator.
+                        </div>
+                      )}
+
+                      <div className="pt-2 flex justify-end gap-2">
+                        <button
+                          onClick={() => handleVerifyStudent(user.id, true)}
+                          className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs transition"
+                        >
+                          Approve & Verify Creator
+                        </button>
+                        <button
+                          onClick={() => handleVerifyStudent(user.id, false)}
+                          className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-rose-600 font-semibold text-xs hover:bg-rose-50 dark:hover:bg-rose-950/30 transition"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
